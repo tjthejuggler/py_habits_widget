@@ -48,6 +48,7 @@ class IconGrid(QWidget):
                     last_value = round(last_value/50)
                 elif "Squats" in activities[i]:
                     last_value = round(last_value/30)
+                    print(last_value)
                 elif "Cold Shower" in activities[i]:
                     if last_value > 0 and last_value < 3:
                         last_value = 3
@@ -55,6 +56,7 @@ class IconGrid(QWidget):
 
                 icon_folder = 'redgoldpainthd'
                 if last_value == 1:
+                    print("last_value == 1", activities[i])
                     icon_folder = 'orangewhitepearlhd'
                 elif last_value == 2:
                     icon_folder = 'greenfloralhd'
@@ -69,14 +71,14 @@ class IconGrid(QWidget):
 
         #MAKE A GITHUB OF THIS!!
 
-                icon_dir = '~/projects/kde_habits_widget/icons/'+icon_folder+'/'
+                icon_dir = '~/projects/py_habits_widget/icons/'+icon_folder+'/'
                 icon_dir = os.path.expanduser(icon_dir)
 
                 icon_finder = IconFinder()
                 icon = icon_finder.find_icon(activities[i])
 
                 icon_file = icon + '.png'
-                # script_file = '~/projects/kde_habits_widget/script.py'
+                # script_file = '~/projects/py_habits_widget/script.py'
                 # script_file = os.path.expanduser(habitsdb_dir)
                 print(icon_dir + icon_file)
                 icons_and_scripts.append((icon_dir + icon_file, activities[i]))
