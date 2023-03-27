@@ -1,12 +1,12 @@
 import sys
-from PyQt5.QtWidgets import QApplication, QWidget, QGridLayout, QPushButton, QSpacerItem, QSizePolicy
+#from PyQt5.QtWidgets import QApplication, QWidget, QGridLayout, QPushButton, QSpacerItem, QSizePolicy
+from PyQt5.QtWidgets import QApplication, QWidget, QGridLayout, QPushButton, QSpacerItem, QSizePolicy, QInputDialog
 from PyQt5.QtGui import QIcon
-from PyQt5.QtCore import Qt, QSize
-import subprocess
+from PyQt5.QtCore import QSize
 import os
 import json
 from IconFinder import IconFinder
-
+import time
 class IconGrid(QWidget):
     def __init__(self):
         super().__init__()
@@ -63,11 +63,11 @@ class IconGrid(QWidget):
                 elif last_value == 3:
                     icon_folder = 'bluewhitepearlhd'
                 elif last_value == 4:
-                    icon_folder = 'blueorbhd'
+                    icon_folder = 'pinkorbhd'
                 elif last_value == 5:
                     icon_folder = 'glossysilverhd'
-                elif last_value == 6:
-                    icon_folder = 'transparenthd'
+                elif last_value > 5:
+                    icon_folder = 'transparentglasshd'
 
         #MAKE A GITHUB OF THIS!!
 
@@ -90,14 +90,11 @@ class IconGrid(QWidget):
     def init_ui(self):
         grid_layout = QGridLayout()
         self.setLayout(grid_layout)
-
         # List of icon files and associated script files with arguments
         icons_and_scripts = self.get_icons_and_scripts()
-
         num_columns = 8
         num_rows = 6
         index = 0
-
         self.buttons = []
 
         for col in range(num_columns):
@@ -108,41 +105,48 @@ class IconGrid(QWidget):
                         button = QPushButton()
                         button.setIcon(QIcon(icon))
                         button.setIconSize(QSize(64, 64))
-                        button.clicked.connect(lambda checked, a=arg: self.run_script(a))
+                        button.clicked.connect(lambda checked, a=arg: self.increment_habit(a))
                         grid_layout.addWidget(button, row, col)
                         self.buttons.append(button)
                     else:
                         spacer = QSpacerItem(64, 64, QSizePolicy.Fixed, QSizePolicy.Fixed)
                         grid_layout.addItem(spacer, row, col)
                 index += 1
-
         self.setWindowTitle('Icon Grid')
         self.show()
 
-    def run_script(self, argument):
+    def increment_habit(self, argument):
+        write_updated_habitsdb_to_add = False
         habitsdb_to_add_dir = '~/Documents/obsidian_note_vault/noteVault/habitsdb_to_add.txt'
         habitsdb_to_add_dir = os.path.expanduser(habitsdb_to_add_dir)
         with open(habitsdb_to_add_dir, 'r') as f:
             habitsdb_to_add = json.load(f)
-
-        habitsdb_to_add[argument] += 1
-
-        with open(habitsdb_to_add_dir, 'w') as f:
-            json.dump(habitsdb_to_add, f)
-
-        self.update_icons()
+        if "Widget" in argument:
+            # Display an input dialog
+            value, ok = QInputDialog.getInt(self, 'Input Dialog', f'Enter the increment for {argument}:', min=1)
+            if ok:
+                habitsdb_to_add[argument] += value
+                write_updated_habitsdb_to_add = True
+        else:
+            habitsdb_to_add[argument] += 1
+            write_updated_habitsdb_to_add = True        
+        if write_updated_habitsdb_to_add:
+            with open(habitsdb_to_add_dir, 'w') as f:
+                json.dump(habitsdb_to_add, f, indent=4, sort_keys=True)
+            self.update_icons()
+            time.sleep(1)
+            update_theme_script = '~/projects/tail/habits_kde_theme.py'
+            update_theme_script = os.path.expanduser(update_theme_script)
+            os.system('python3 '+update_theme_script)
         
     def update_icons(self):
         icons_and_scripts = self.get_icons_and_scripts()
-
         button_index = 0
         for index, item in enumerate(icons_and_scripts):
             if item is not None:
                 icon, _ = item
                 self.buttons[button_index].setIcon(QIcon(icon))
                 button_index += 1
-
-
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)

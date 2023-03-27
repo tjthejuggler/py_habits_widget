@@ -1,3 +1,6 @@
 put the streak numbers on the widget, at least the ones we have on the phone, but maybe some of the other more involved ones.
 
 make a way to put number widgets for the ones that need it
+
+clicking podcast should tell you to do it on your phone (same true of record broken and unusual experience)
+    better yet, figure out how to make a popup text input for these on computer
