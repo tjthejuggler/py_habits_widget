@@ -1,6 +1,8 @@
 import sys
 #from PyQt5.QtWidgets import QApplication, QWidget, QGridLayout, QPushButton, QSpacerItem, QSizePolicy
-from PyQt5.QtWidgets import QApplication, QWidget, QGridLayout, QPushButton, QSpacerItem, QSizePolicy, QInputDialog
+#from PyQt5.QtWidgets import QApplication, QWidget, QGridLayout, QPushButton, QSpacerItem, QSizePolicy, QInputDialog
+from PyQt5.QtWidgets import QApplication, QWidget, QGridLayout, QPushButton, QSpacerItem, QSizePolicy, QInputDialog, QLabel
+
 from PyQt5.QtGui import QPainter, QFont
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import QSize
@@ -80,6 +82,7 @@ class IconGrid(QWidget):
 
 
     def get_icons_and_scripts(self):
+        
         
         activities = [ 
             'Dream acted', 'Sleep watch', 'Apnea walked', 'Cold Shower Widget', 'Programming sessions', 'Question asked', 'Unusual experience', 'Early phone', 'Apnea practiced', 'Launch Squats Widget', 'Juggling tech sessions', 'Podcast finished', 'Meditations', 'Anki created', 'Apnea apb', 'Launch Situps Widget', 'Writing sessions', 'Educational video watched', 'Kind stranger', 'Anki mydis done', 'Apnea spb', 'Launch Pushups Widget', 'UC post', 'Article read', 'Broke record', 'Health learned', 'None', 'Cardio sessions', 'AI tool', 'Language studied', 'None', 'Janki used', 'None', 'Good posture',  'Drew', 'Juggling record broke', 'None', 'None', 'None', 'Flossed', 'None', 'Fun juggle', 'None', 'None','Todos done', 'None', 'None', 'Music listen'
@@ -170,8 +173,13 @@ class IconGrid(QWidget):
         index = 0
         self.buttons = []
 
+        # Add a QLabel for the total number
+        self.total_label = QLabel()
+        grid_layout.addWidget(self.total_label, 0, num_columns - 1)
+        self.update_total()
+
         for col in range(num_columns):
-            for row in range(num_rows):
+            for row in range(1, num_rows + 1):  # Start from row 1 to accommodate the total_label
                 if index < len(icons_and_scripts):
                     if icons_and_scripts[index] is not None:
                         icon, arg, left_number, right_number = icons_and_scripts[index]
@@ -187,6 +195,7 @@ class IconGrid(QWidget):
                 index += 1
         self.setWindowTitle('Icon Grid')
         self.show()
+
 
 
     def increment_habit(self, argument):
@@ -221,6 +230,60 @@ class IconGrid(QWidget):
                 icon, _ = item
                 self.buttons[button_index].setIcon(QIcon(icon))
                 button_index += 1
+
+    def update_total(self):
+        icons_and_scripts = self.get_icons_and_scripts()
+        today_total = 0
+        last_7_days_total = 0
+        last_30_days_total = 0
+
+        for item in icons_and_scripts:
+            if item is not None:
+                icon, arg, left_number, right_number = item
+
+                habitsdb_dir = '~/Documents/obsidian_note_vault/noteVault/habitsdb.txt'
+                habitsdb_dir = os.path.expanduser(habitsdb_dir)
+                with open(habitsdb_dir, 'r') as f:
+                    habitsdb = json.load(f)
+
+                habitsdb_to_add_dir = '~/Documents/obsidian_note_vault/noteVault/habitsdb_to_add.txt'
+                habitsdb_to_add_dir = os.path.expanduser(habitsdb_to_add_dir)
+                with open(habitsdb_to_add_dir, 'r') as f:
+                    habitsdb_to_add = json.load(f)
+
+                inner_dict = habitsdb[arg]
+                sorted_dates = sorted(inner_dict.keys(), reverse=True)
+                current_habit_today = inner_dict[sorted_dates[0]] + habitsdb_to_add[arg]
+
+                def adjust_habit_count(count, habit_name):
+                    if "Pushups" in habit_name:
+                        return round(count / 30)
+                    elif "Situps" in habit_name:
+                        return round(count / 50)
+                    elif "Squats" in habit_name:
+                        return round(count / 30)
+                    elif "Cold Shower" in habit_name:
+                        if count > 0 and count < 3:
+                            count = 3
+                        return round(count / 3)
+                    else:
+                        return count
+
+                today_total += adjust_habit_count(current_habit_today, arg)
+
+                last_7_days_count = 0
+                for date_str in sorted_dates[:7]:
+                    last_7_days_count += adjust_habit_count(inner_dict[date_str], arg)
+                last_7_days_total += last_7_days_count
+
+                last_30_days_count = 0
+                for date_str in sorted_dates[:30]:
+                    last_30_days_count += adjust_habit_count(inner_dict[date_str], arg)
+                last_30_days_total += last_30_days_count
+        #self.total_label.setText(f"Today: {today_total} | Last 7 days: {last_7_days_total / 7:.1f} | Last 30 days: {last_30_days_total / 30:.1f}")
+
+        self.total_label.setText(f"{today_total}|{last_7_days_total / 7:.1f}|{last_30_days_total / 30:.1f}")
+
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
