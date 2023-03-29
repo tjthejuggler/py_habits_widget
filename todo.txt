@@ -2,3 +2,13 @@ clicking podcast should tell you to do it on your phone (same true of record bro
     better yet, figure out how to make a popup text input for these on computer
 
 the 'Todos done' Situation is not ideal right now, if I have some todos in queue and I turn on my phone and go straight into phone habits widget, then a Todo Done will open obsidian, not add todo items. Also, clicking podcast on computer widget will tell me to use the podcast app once on phone. It should probably just tell me on the computer to do that, or give me a text input to put in the podcast info.
+
+
+
+PHNE HABITS WIDGET TODO
+habit widget reset gave a "too many tasks" error, maybe there would be a way to lessen it
+
+Maybe i can get habit buttons more responsive if I use the queue here as well. It seems like there could be something to the fact that if it fails loop habit then it doesnt go onto the flash, like have that be the place where a loop habit "has been added" dict gets updated, and then so long as thats different from the main dict it keeps trying.
+
+As soon as i open the phone habit widget it could load the current values of all icons instead of waiting for me to click one.
+    I tried this with a global variable in this format %Myglobalvariable and it didnt work

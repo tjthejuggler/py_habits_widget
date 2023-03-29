@@ -36,11 +36,11 @@ def batch_process(input_folder, output_folder, h_shift, s_scale, v_scale):
             print(f"Processed {input_file_path} -> {output_file_path}")
 
 if __name__ == "__main__":
-    input_folder = './drawable'
-    output_folder = './shift_test_output'
-    h_shift = 62  # Hue shift value (0-180), e.g., 10
-    s_scale = 1.2  # Saturation scale factor, e.g., 1.5 for a 50% increase
-    v_scale = 0.95  # Value (brightness) scale factor, e.g., 0.8 for a 20% decrease
+    input_folder = './icons/redgoldpainthd'
+    output_folder = './icons/yellowpainthd'
+    h_shift = 17  # Hue shift value (0-180), e.g., 10
+    s_scale = 1.7  # Saturation scale factor, e.g., 1.5 for a 50% increase
+    v_scale = 6.45  # Value (brightness) scale factor, e.g., 0.8 for a 20% decrease
 
     batch_process(input_folder, output_folder, h_shift, s_scale, v_scale)
 
