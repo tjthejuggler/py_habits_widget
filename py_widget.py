@@ -21,17 +21,13 @@ class NumberedButton(QPushButton):
         super(NumberedButton, self).paintEvent(event)
         painter = QPainter(self)
         painter.setFont(QFont("Arial", 12))
-        painter.drawText(4, 76, str(self.left_number))
+        painter.drawText(4, 66, str(self.left_number))
         right_number_length = len(str(self.right_number))
-
-        painter.drawText(72-(right_number_length*8), 76, str(self.right_number))
-
+        painter.drawText(72-(right_number_length*8), 66, str(self.right_number))
 class IconGrid(QWidget):
     def __init__(self):
         super().__init__()
-
         self.init_ui()
-
 
     def get_days_since_zero(self, inner_dict):
         days_since_zero = None
@@ -80,9 +76,7 @@ class IconGrid(QWidget):
         longest_streak = max(longest_streak, current_streak)
         return longest_streak
 
-
     def get_icons_and_scripts(self):
-        
         
         activities = [ 
             'Dream acted', 'Sleep watch', 'Apnea walked', 'Cold Shower Widget', 'Programming sessions', 'Question asked', 'Unusual experience', 'Early phone', 'Apnea practiced', 'Launch Squats Widget', 'Juggling tech sessions', 'Podcast finished', 'Meditations', 'Anki created', 'Apnea apb', 'Launch Situps Widget', 'Writing sessions', 'Educational video watched', 'Kind stranger', 'Anki mydis done', 'Apnea spb', 'Launch Pushups Widget', 'UC post', 'Article read', 'Broke record', 'Health learned', 'None', 'Cardio sessions', 'AI tool', 'Language studied', 'None', 'Janki used', 'None', 'Good posture',  'Drew', 'Juggling record broke', 'None', 'None', 'None', 'Flossed', 'None', 'Fun juggle', 'None', 'None','Todos done', 'None', 'None', 'Music listen'
@@ -112,9 +106,7 @@ class IconGrid(QWidget):
                 right_number = longest_streak = self.get_longest_streak(inner_dict)
                 print("activities[i]", activities[i], "days_since_zero", days_since_zero, "days_since_not_zero", days_since_not_zero, "longest_streak", longest_streak)
                 last_value_from_habitsdb = list(inner_dict.values())[-1]
-
                 value_from_habitsdb_to_add = habitsdb_to_add[activities[i]]
-
                 last_value = last_value_from_habitsdb + value_from_habitsdb_to_add
 
                 if "Pushups" in activities[i]:
@@ -145,17 +137,11 @@ class IconGrid(QWidget):
                 elif last_value > 5:
                     icon_folder = 'transparentglasshd'
 
-        #MAKE A GITHUB OF THIS!!
-
                 icon_dir = '~/projects/py_habits_widget/icons/'+icon_folder+'/'
                 icon_dir = os.path.expanduser(icon_dir)
-
                 icon_finder = IconFinder()
                 icon = icon_finder.find_icon(activities[i])
-
                 icon_file = icon + '.png'
-                # script_file = '~/projects/py_habits_widget/script.py'
-                # script_file = os.path.expanduser(habitsdb_dir)
                 print(icon_dir + icon_file)
                 icons_and_scripts.append((icon_dir + icon_file, activities[i], left_number, right_number))
 
@@ -196,8 +182,6 @@ class IconGrid(QWidget):
         self.setWindowTitle('Icon Grid')
         self.show()
 
-
-
     def increment_habit(self, argument):
         write_updated_habitsdb_to_add = False
         habitsdb_to_add_dir = '~/Documents/obsidian_note_vault/noteVault/habitsdb_to_add.txt'
@@ -216,18 +200,20 @@ class IconGrid(QWidget):
         if write_updated_habitsdb_to_add:
             with open(habitsdb_to_add_dir, 'w') as f:
                 json.dump(habitsdb_to_add, f, indent=4, sort_keys=True)
-            self.update_icons()
             time.sleep(1)
             update_theme_script = '~/projects/tail/habits_kde_theme.py'
             update_theme_script = os.path.expanduser(update_theme_script)
             os.system('python3 '+update_theme_script)
-        
+            self.update_icons()
+
     def update_icons(self):
+        print("Updating icons")
         icons_and_scripts = self.get_icons_and_scripts()
         button_index = 0
         for index, item in enumerate(icons_and_scripts):
             if item is not None:
-                icon, _ = item
+                print("item", item)
+                icon, _, left_number, right_number = item
                 self.buttons[button_index].setIcon(QIcon(icon))
                 button_index += 1
 

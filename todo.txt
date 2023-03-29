@@ -6,3 +6,5 @@ clicking podcast should tell you to do it on your phone (same true of record bro
     better yet, figure out how to make a popup text input for these on computer
 
 the 'Todos done' Situation is not ideal right now, if I have some todos in queue and I turn on my phone and go straight into phone habits widget, then a Todo Done will open obsidian, not add todo items. Also, clicking podcast on computer widget will tell me to use the podcast app once on phone. It should probably just tell me on the computer to do that, or give me a text input to put in the podcast info.
+
+make alerts that show all pending habits
