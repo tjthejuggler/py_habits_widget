@@ -11,6 +11,9 @@ import json
 from IconFinder import IconFinder
 import time
 
+def notify(message):
+    msg = "notify-send ' ' '"+message+"'"
+    os.system(msg)
 class NumberedButton(QPushButton):
     def __init__(self, left_number, right_number, *args, **kwargs):
         super(NumberedButton, self).__init__(*args, **kwargs)
@@ -198,6 +201,11 @@ class IconGrid(QWidget):
             habitsdb_to_add[argument] += 1
             write_updated_habitsdb_to_add = True        
         if write_updated_habitsdb_to_add:
+            result = "Pending habits\n"
+            for key, value in habitsdb_to_add.items():
+                if value > 0:
+                    result += f"{key}: {value}\n"
+            notify(result)
             with open(habitsdb_to_add_dir, 'w') as f:
                 json.dump(habitsdb_to_add, f, indent=4, sort_keys=True)
             time.sleep(1)
@@ -205,6 +213,7 @@ class IconGrid(QWidget):
             update_theme_script = os.path.expanduser(update_theme_script)
             os.system('python3 '+update_theme_script)
             self.update_icons()
+            self.update_total()
 
     def update_icons(self):
         print("Updating icons")
