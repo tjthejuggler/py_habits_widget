@@ -136,7 +136,7 @@ class IconGrid(QWidget):
                 elif last_value == 4:
                     icon_folder = 'pinkorbhd'
                 elif last_value == 5:
-                    icon_folder = 'glossysilverhd'
+                    icon_folder = 'yellowpainthd'
                 elif last_value > 5:
                     icon_folder = 'transparentglasshd'
 
