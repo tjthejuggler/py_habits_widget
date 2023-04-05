@@ -14,3 +14,8 @@ Maybe i can get habit buttons more responsive if I use the queue here as well. I
 
 As soon as i open the phone habit widget it could load the current values of all icons instead of waiting for me to click one.
     I tried this with a global variable in this format %Myglobalvariable and it didnt work
+
+
+BUG
+theme changed to brown without having enough habits
+
