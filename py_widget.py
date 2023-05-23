@@ -8,9 +8,15 @@ import json
 from IconFinder import IconFinder
 import time
 from streak_helper import *
+from habitdb_streak_finder import *
 from utilities import *
 import datetime
 import re
+
+#change obsidian_dir to this for zenbook ~/Documents/obsidian_note_vault/noteVault
+
+with open('/home/lunkwill/projects/py_habits_widget/obsidian_dir.txt', 'r') as f:
+    obsidian_dir = f.read().strip()
 
 def notify(message):
     msg = "notify-send ' ' '"+message+"'"
@@ -39,8 +45,8 @@ class IconGrid(QWidget):
             'Dream acted', 'Sleep watch', 'Apnea walked', 'Cold Shower Widget', 'Programming sessions', 'Question asked', 'Unusual experience', 'Early phone', 'Apnea practiced', 'Launch Squats Widget', 'Juggling tech sessions', 'Podcast finished', 'Meditations', 'Anki created', 'Apnea apb', 'Launch Situps Widget', 'Writing sessions', 'Educational video watched', 'Kind stranger', 'Anki mydis done', 'Apnea spb', 'Launch Pushups Widget', 'UC post', 'Article read', 'Broke record', 'Health learned', 'None', 'Cardio sessions', 'AI tool', 'Language studied', 'None', 'Janki used', 'None', 'Good posture',  'Drew', 'Juggling record broke', 'None', 'None', 'None', 'Flossed', 'None', 'Fun juggle', 'None', 'None','Todos done', 'None', 'None', 'Music listen'
             ]
 
-        habitsdb = make_json('~/Documents/obsidian_note_vault/noteVault/habitsdb.txt')
-        habitsdb_to_add = make_json('~/Documents/obsidian_note_vault/noteVault/habitsdb_to_add.txt')
+        habitsdb = make_json(obsidian_dir+'habitsdb.txt')
+        habitsdb_to_add = make_json(obsidian_dir+'habitsdb_to_add.txt')
 
         icons_and_scripts = []
 
@@ -126,7 +132,7 @@ class IconGrid(QWidget):
 
     def increment_habit(self, argument):
         write_updated_habitsdb_to_add = False
-        habitsdb_to_add_dir = '~/Documents/obsidian_note_vault/noteVault/habitsdb_to_add.txt'
+        habitsdb_to_add_dir = obsidian_dir+'habitsdb_to_add.txt'
         habitsdb_to_add = make_json(habitsdb_to_add_dir)
         if "Widget" in argument:
             value, ok = QInputDialog.getInt(self, 'Input Dialog', f'Enter the increment for {argument}:', min=1)
@@ -134,9 +140,9 @@ class IconGrid(QWidget):
                 habitsdb_to_add[argument] += value
                 write_updated_habitsdb_to_add = True
         elif "Broke record" in argument or "Apnea spb" in argument:
-            personal_records_dir = '~/Documents/obsidian_note_vault/noteVault/tail/personal_records.txt'
+            personal_records_dir = obsidian_dir+'tail/personal_records.txt'
             if "Apnea spb" in argument:
-                personal_records_dir = '~/Documents/obsidian_note_vault/noteVault/tail/apnea_records.txt'
+                personal_records_dir = obsidian_dir+'tail/apnea_records.txt'
             personal_records = make_json(personal_records_dir)
 
             dialog = QDialog(self)
@@ -230,8 +236,8 @@ class IconGrid(QWidget):
             if item is not None:
                 icon, arg, left_number, right_number = item
                 
-                habitsdb = make_json('~/Documents/obsidian_note_vault/noteVault/habitsdb.txt')
-                habitsdb_to_add = make_json('~/Documents/obsidian_note_vault/noteVault/habitsdb_to_add.txt')
+                habitsdb = make_json(obsidian_dir+'habitsdb.txt')
+                habitsdb_to_add = make_json(obsidian_dir+'habitsdb_to_add.txt')
 
                 inner_dict = habitsdb[arg]
                 sorted_dates = sorted(inner_dict.keys(), reverse=True)
@@ -263,7 +269,10 @@ class IconGrid(QWidget):
                     last_30_days_count += adjust_habit_count(inner_dict[date_str], arg)
                 last_30_days_total += last_30_days_count
 
-        self.total_label.setText(f"{today_total}|{last_7_days_total / 7:.1f}|{last_30_days_total / 30:.1f}")
+        current_date_streak, current_date_antistreak, longest_streak_record, longest_antistreak_record = get_streak_numbers()
+        net_streak = current_date_streak - current_date_antistreak
+        streak_text = f"{net_streak}\ns {current_date_streak}:{longest_streak_record}\nas {current_date_antistreak}:{longest_antistreak_record}\n"
+        self.total_label.setText(f"{streak_text}{today_total}|{last_7_days_total / 7:.1f}|{last_30_days_total / 30:.1f}")
 
 
 if __name__ == '__main__':

@@ -11,6 +11,9 @@ import json
 from IconFinder import IconFinder
 import time
 
+with open('/home/lunkwill/projects/py_habits_widget/obsidian_dir.txt', 'r') as f:
+    obsidian_dir = f.read().strip()
+
 class NumberedButton(QPushButton):
     def __init__(self, left_number, right_number, *args, **kwargs):
         super(NumberedButton, self).__init__(*args, **kwargs)
@@ -88,12 +91,12 @@ class IconGrid(QWidget):
             'Dream acted', 'Sleep watch', 'Apnea walked', 'Cold Shower Widget', 'Programming sessions', 'Question asked', 'Unusual experience', 'Early phone', 'Apnea practiced', 'Launch Squats Widget', 'Juggling tech sessions', 'Podcast finished', 'Meditations', 'Anki created', 'Apnea apb', 'Launch Situps Widget', 'Writing sessions', 'Educational video watched', 'Kind stranger', 'Anki mydis done', 'Apnea spb', 'Launch Pushups Widget', 'UC post', 'Article read', 'Broke record', 'Health learned', 'None', 'Cardio sessions', 'AI tool', 'Language studied', 'None', 'Janki used', 'None', 'Good posture',  'Drew', 'Juggling record broke', 'None', 'None', 'None', 'Flossed', 'None', 'Fun juggle', 'None', 'None','Todos done', 'None', 'None', 'Music listen'
             ]
 
-        habitsdb_dir = '~/Documents/obsidian_note_vault/noteVault/habitsdb.txt'
+        habitsdb_dir = obsidian_dir+'habitsdb.txt'
         habitsdb_dir = os.path.expanduser(habitsdb_dir)
         with open(habitsdb_dir, 'r') as f:
             habitsdb = json.load(f)
 
-        habitsdb_to_add_dir = '~/Documents/obsidian_note_vault/noteVault/habitsdb_to_add.txt'
+        habitsdb_to_add_dir = obsidian_dir+'habitsdb_to_add.txt'
         habitsdb_to_add_dir = os.path.expanduser(habitsdb_to_add_dir)
         with open(habitsdb_to_add_dir, 'r') as f:
             habitsdb_to_add = json.load(f)
@@ -200,7 +203,7 @@ class IconGrid(QWidget):
 
     def increment_habit(self, argument):
         write_updated_habitsdb_to_add = False
-        habitsdb_to_add_dir = '~/Documents/obsidian_note_vault/noteVault/habitsdb_to_add.txt'
+        habitsdb_to_add_dir = obsidian_dir+'habitsdb_to_add.txt'
         habitsdb_to_add_dir = os.path.expanduser(habitsdb_to_add_dir)
         with open(habitsdb_to_add_dir, 'r') as f:
             habitsdb_to_add = json.load(f)
@@ -241,12 +244,12 @@ class IconGrid(QWidget):
             if item is not None:
                 icon, arg, left_number, right_number = item
 
-                habitsdb_dir = '~/Documents/obsidian_note_vault/noteVault/habitsdb.txt'
+                habitsdb_dir = obsidian_dir+'habitsdb.txt'
                 habitsdb_dir = os.path.expanduser(habitsdb_dir)
                 with open(habitsdb_dir, 'r') as f:
                     habitsdb = json.load(f)
 
-                habitsdb_to_add_dir = '~/Documents/obsidian_note_vault/noteVault/habitsdb_to_add.txt'
+                habitsdb_to_add_dir = obsidian_dir+'habitsdb_to_add.txt'
                 habitsdb_to_add_dir = os.path.expanduser(habitsdb_to_add_dir)
                 with open(habitsdb_to_add_dir, 'r') as f:
                     habitsdb_to_add = json.load(f)
