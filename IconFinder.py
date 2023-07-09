@@ -37,7 +37,9 @@ class IconFinder:
             'Apnea apb': 'music_microphone',
             'Cardio sessions': 'bicycle',
             'Launch Squats Widget': 'animal_duck4',
-            'Fun juggle': 'a_media29_record'
+            'Fun juggle': 'a_media29_record',
+            'Took pills': 'car_gauge3',
+            'Book read': 'registered_mark1'
         }
 
         # Create a dictionary with the reverse mapping from icons to activities

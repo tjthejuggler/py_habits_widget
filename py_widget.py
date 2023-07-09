@@ -34,6 +34,7 @@ class NumberedButton(QPushButton):
         painter.drawText(4, 66, str(self.left_number))
         right_number_length = len(str(self.right_number))
         painter.drawText(72-(right_number_length*8), 66, str(self.right_number))
+
 class IconGrid(QWidget):
     def __init__(self):
         super().__init__()
@@ -42,7 +43,7 @@ class IconGrid(QWidget):
     def get_icons_and_scripts(self):
         
         activities = [ 
-            'Dream acted', 'Sleep watch', 'Apnea walked', 'Cold Shower Widget', 'Programming sessions', 'Question asked', 'Unusual experience', 'Early phone', 'Apnea practiced', 'Launch Squats Widget', 'Juggling tech sessions', 'Podcast finished', 'Meditations', 'Anki created', 'Apnea apb', 'Launch Situps Widget', 'Writing sessions', 'Educational video watched', 'Kind stranger', 'Anki mydis done', 'Apnea spb', 'Launch Pushups Widget', 'UC post', 'Article read', 'Broke record', 'Health learned', 'None', 'Cardio sessions', 'AI tool', 'Language studied', 'None', 'Janki used', 'None', 'Good posture',  'Drew', 'Juggling record broke', 'None', 'None', 'None', 'Flossed', 'None', 'Fun juggle', 'None', 'None','Todos done', 'None', 'None', 'Music listen'
+            'Dream acted', 'Sleep watch', 'Apnea walked', 'Cold Shower Widget', 'Programming sessions', 'Book read', 'Unusual experience', 'Early phone', 'Apnea practiced', 'Launch Squats Widget', 'Juggling tech sessions', 'Podcast finished', 'Meditations', 'Anki created', 'Apnea apb', 'Launch Situps Widget', 'Writing sessions', 'Educational video watched', 'Kind stranger', 'Anki mydis done', 'Apnea spb', 'Launch Pushups Widget', 'UC post', 'Article read', 'Broke record', 'Health learned', 'None', 'Cardio sessions', 'AI tool', 'Language studied', 'None', 'Janki used', 'None', 'Good posture',  'Drew', 'Juggling record broke', 'None', 'Took pills', 'None', 'Flossed', 'Question asked', 'Fun juggle', 'None', 'None','Todos done', 'None', 'None', 'Music listen'
             ]
 
         habitsdb = make_json(obsidian_dir+'habitsdb.txt')
@@ -273,6 +274,7 @@ class IconGrid(QWidget):
         net_streak = current_date_streak - current_date_antistreak
         streak_text = f"{net_streak}\ns {current_date_streak}:{longest_streak_record}\nas {current_date_antistreak}:{longest_antistreak_record}\n"
         self.total_label.setText(f"{streak_text}{today_total}|{last_7_days_total / 7:.1f}|{last_30_days_total / 30:.1f}")
+
 
 
 if __name__ == '__main__':
