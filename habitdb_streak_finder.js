@@ -101,3 +101,48 @@ function get_streak_numbers() {
 
     return [current_date_streak, current_date_antistreak, longest_streak_record['streak'], longest_antistreak_record['streak']];
 }
+// JavaScript equivalent of Python's make_json() function
+function make_json(directory) {
+    var fs = require('fs');
+    var jsonString = fs.readFileSync(directory, 'utf8');
+    return JSON.parse(jsonString);
+}
+
+// JavaScript equivalent of Python's get_streak_numbers() function
+function get_streak_numbers(target_date, obsidian_dir, habitsdb, habitsdb_to_add, activities) {
+    var start_date = target_date;
+    var end_date = new Date().toISOString().split('T')[0];
+
+    var habitsdb = make_json(obsidian_dir + 'habitsdb.txt');
+    var habitsdb_to_add = make_json(obsidian_dir + 'habitsdb_to_add.txt');
+
+    var activities = Object.keys(habitsdb);
+
+    var total_days_since_not_zero = 0;
+    var total_days_since_zero = 0;
+    for (var i = 0; i < activities.length; i++) {
+        var inner_dict = habitsdb[activities[i]];
+        var days_since_not_zero = get_days_since_not_zero_custom_date(inner_dict, target_date);
+        total_days_since_not_zero += days_since_not_zero;
+        var days_since_zero = get_days_since_zero_custom_datef(inner_dict, target_date);
+        total_days_since_zero += days_since_zero;
+    }
+
+    var results = find_longest_streaks_and_antistreaks(start_date, end_date, activities, habitsdb);
+
+    var longest_streak_record = results[0];
+    var longest_antistreak_record = results[1];
+    var current_date_streak = results[2];
+    var current_date_antistreak = results[3];
+
+    console.log('Longest streak date:', longest_streak_record['date']);
+    console.log('Longest streak:', longest_streak_record['streak']);
+
+    console.log('Longest antistreak date:', longest_antistreak_record['date']);
+    console.log('Longest antistreak:', longest_antistreak_record['streak']);
+
+    console.log('Current streak:', current_date_streak);
+    console.log('Current antistreak:', current_date_antistreak);
+
+    return [current_date_streak, current_date_antistreak, longest_streak_record['streak'], longest_antistreak_record['streak']];
+}
