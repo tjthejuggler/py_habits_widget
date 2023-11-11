@@ -39,7 +39,13 @@ class IconFinder:
             'Launch Squats Widget': 'animal_duck4',
             'Fun juggle': 'a_media29_record',
             'Took pills': 'car_gauge3',
-            'Book read': 'registered_mark1'
+            'Book read': 'registered_mark1',
+            'Juggle goal': 'ladder1_sc48',
+            'Filmed juggle': 'camera',
+            'Inspired juggle': 'information4_sc49',
+            'Read academic': 'charts1_sc1',
+            'Lung stretch': 'two_directions_left_right',
+            'Drm Review': 'anchor6_sc48'
         }
 
         # Create a dictionary with the reverse mapping from icons to activities

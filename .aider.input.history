@@ -1,0 +1,28 @@
+
+# 2023-07-09 20:08:06.951808
++A tasker javascriptlet that returns the same variables that get_streak_numbers() does in habitdb_streak_finder.py
+
+# 2023-07-09 20:12:30.996562
++I need this stuff included as well # Example usage
++target_date = '2022-09-03'
++date_format = '%Y-%m-%d'
++target_date_obj = datetime.strptime(target_date, date_format).date()
++
++with open('/home/lunkwill/projects/tail/obsidian_dir.txt', 'r') as f:
++    obsidian_dir = f.read().strip()
++
++habitsdb = make_json(obsidian_dir+'habitsdb.txt')
++habitsdb_to_add = make_json(obsidian_dir+'habitsdb_to_add.txt')
++
++#activities is the list of keys from habitsdb
++activities = list(habitsdb.keys())
++
++icons_and_scripts = []
++total_days_since_not_zero = 0
++total_days_since_zero = 0
++for i in range(len(activities)):
++    inner_dict = habitsdb[activities[i]]
++    days_since_not_zero = get_days_since_not_zero_custom_date(inner_dict, target_date)
++    total_days_since_not_zero += days_since_not_zero
++    days_since_zero = get_days_since_zero_custom_datef(inner_dict, target_date)
++    total_days_since_zero += days_since_zero

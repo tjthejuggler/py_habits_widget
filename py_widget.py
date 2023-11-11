@@ -12,6 +12,7 @@ from habitdb_streak_finder import *
 from utilities import *
 import datetime
 import re
+import math
 
 #change obsidian_dir to this for zenbook ~/Documents/obsidian_note_vault/noteVault
 
@@ -43,7 +44,7 @@ class IconGrid(QWidget):
     def get_icons_and_scripts(self):
         
         activities = [ 
-            'Dream acted', 'Sleep watch', 'Apnea walked', 'Cold Shower Widget', 'Programming sessions', 'Book read', 'Unusual experience', 'Early phone', 'Apnea practiced', 'Launch Squats Widget', 'Juggling tech sessions', 'Podcast finished', 'Meditations', 'Anki created', 'Apnea apb', 'Launch Situps Widget', 'Writing sessions', 'Educational video watched', 'Kind stranger', 'Anki mydis done', 'Apnea spb', 'Launch Pushups Widget', 'UC post', 'Article read', 'Broke record', 'Health learned', 'None', 'Cardio sessions', 'AI tool', 'Language studied', 'None', 'Janki used', 'None', 'Good posture',  'Drew', 'Juggling record broke', 'None', 'Took pills', 'None', 'Flossed', 'Question asked', 'Fun juggle', 'None', 'None','Todos done', 'None', 'None', 'Music listen'
+            'Juggling record broke', 'Dream acted', 'Sleep watch', 'Apnea walked', 'Cold Shower Widget', 'Programming sessions', 'Book read', 'Fun juggle', 'Drm Review',  'Early phone', 'Apnea practiced', 'Launch Squats Widget', 'Juggling tech sessions', 'Podcast finished', 'Janki used', 'Unusual experience', 'Anki created', 'Apnea apb', 'Launch Situps Widget', 'Writing sessions', 'Educational video watched', 'Filmed juggle', 'Meditations', 'Anki mydis done', 'Apnea spb', 'Launch Pushups Widget', 'UC post', 'Article read', 'Inspired juggle', 'Kind stranger', 'Health learned', 'Lung stretch', 'Cardio sessions', 'AI tool', 'Read academic', 'Juggle goal', 'Broke record', 'Took pills', 'None', 'Good posture',  'Drew', 'Language studied', 'None', 'None', 'None', 'None', 'Flossed', 'Question asked', 'Music listen', 'None', 'None', 'None', 'Todos done', 'None', 'None', 'None'
             ]
 
         habitsdb = make_json(obsidian_dir+'habitsdb.txt')
@@ -64,17 +65,22 @@ class IconGrid(QWidget):
                 last_value_from_habitsdb = list(inner_dict.values())[-1]
                 value_from_habitsdb_to_add = habitsdb_to_add[activities[i]]
                 last_value = last_value_from_habitsdb + value_from_habitsdb_to_add
-
+                print(activities[i], last_value)
                 if "Pushups" in activities[i]:
-                    last_value = round(last_value/30)
+                    last_value = math.floor(last_value/30 + 0.5)
                 elif "Situps" in activities[i]:
-                    last_value = round(last_value/50)
+                    last_value = math.floor(last_value/50 + 0.5)
                 elif "Squats" in activities[i]:
-                    last_value = round(last_value/30)
+                    last_value = math.floor(last_value/30 + 0.5)
                 elif "Cold Shower" in activities[i]:
                     if last_value > 0 and last_value < 3:
                         last_value = 3
-                    last_value = round(last_value/3)
+                    last_value = math.floor(last_value/3 + 0.5)
+
+                print(activities[i], last_value)
+                #round last_value
+                last_value = math.floor(last_value + 0.5)
+                print(activities[i], last_value)
 
                 icon_folder = 'redgoldpainthd'
                 if last_value == 1:
@@ -106,7 +112,7 @@ class IconGrid(QWidget):
         grid_layout = QGridLayout()
         self.setLayout(grid_layout)
         icons_and_scripts = self.get_icons_and_scripts()
-        num_columns, num_rows, index = 8, 6, 0
+        num_columns, num_rows, index = 8, 7, 0
         self.buttons = []
 
         self.total_label = QLabel()
@@ -246,15 +252,15 @@ class IconGrid(QWidget):
 
                 def adjust_habit_count(count, habit_name):
                     if "Pushups" in habit_name:
-                        return round(count / 30)
+                        return math.floor(count / 30 + 0.5)
                     elif "Situps" in habit_name:
-                        return round(count / 50)
+                        return math.floor(count / 50 + 0.5)
                     elif "Squats" in habit_name:
-                        return round(count / 30)
+                        return math.floor(count / 30 + 0.5)
                     elif "Cold Shower" in habit_name:
                         if count > 0 and count < 3:
                             count = 3
-                        return round(count / 3)
+                        return math.floor(count / 3 + 0.5)
                     else:
                         return count
 
@@ -274,6 +280,12 @@ class IconGrid(QWidget):
         net_streak = current_date_streak - current_date_antistreak
         streak_text = f"{net_streak}\ns {current_date_streak}:{longest_streak_record}\nas {current_date_antistreak}:{longest_antistreak_record}\n"
         self.total_label.setText(f"{streak_text}{today_total}|{last_7_days_total / 7:.1f}|{last_30_days_total / 30:.1f}")
+
+        #write a json file that has net streak, current streak, longest streak, current antistreak, longest antistreak
+        streaks_dir = os.path.expanduser(obsidian_dir+'/tail/streaks.txt')
+        with open(streaks_dir, 'w') as f:
+            json.dump({"net_streak": net_streak, "current_streak": current_date_streak, "longest_streak": longest_streak_record, "current_antistreak": current_date_antistreak, "longest_antistreak": longest_antistreak_record}, f, indent=4, sort_keys=True)
+
 
 
 
