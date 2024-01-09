@@ -52,6 +52,6 @@ totals = [sum(adjust_habit_count(habit.get(date, 0), habit_name) for habit_name,
 totals.reverse()
 
 # Write the totals to a text file
-with open('totals.txt', 'w') as f:
+with open('/home/lunkwill/Documents/obsidyen/habitCounters/total_habits.txt2', 'w') as f:
     f.write(','.join(str(total) for total in totals))
 

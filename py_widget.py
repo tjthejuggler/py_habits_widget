@@ -2,7 +2,8 @@ import sys
 from PyQt5.QtWidgets import QApplication, QWidget, QGridLayout, QPushButton, QSpacerItem, QSizePolicy, QInputDialog, QLabel, QComboBox
 from PyQt5.QtWidgets import QDialog, QVBoxLayout
 from PyQt5.QtGui import QPainter, QFont, QIcon
-from PyQt5.QtCore import QSize
+from PyQt5.QtCore import QSize, Qt
+import matplotlib.pyplot as plt
 import os
 import json
 from IconFinder import IconFinder
@@ -13,6 +14,7 @@ from utilities import *
 import datetime
 import re
 import math
+import subprocess
 
 #change obsidian_dir to this for zenbook ~/Documents/obsidian_note_vault/noteVault
 
@@ -36,6 +38,14 @@ class NumberedButton(QPushButton):
         right_number_length = len(str(self.right_number))
         painter.drawText(72-(right_number_length*8), 66, str(self.right_number))
 
+class ClickableLabel(QLabel):
+    def mousePressEvent(self, event):
+        self.create_graph()
+
+    def create_graph(self):
+        # Create your graph here
+        current_date_streak, current_date_antistreak, longest_streak_record, longest_antistreak_record, highest_net_streak_record, lowest_net_streak_record = get_streak_numbers(True)
+
 class IconGrid(QWidget):
     def __init__(self):
         super().__init__()
@@ -44,7 +54,7 @@ class IconGrid(QWidget):
     def get_icons_and_scripts(self):
         
         activities = [ 
-            'Juggling record broke', 'Dream acted', 'Sleep watch', 'Apnea walked', 'Cold Shower Widget', 'Programming sessions', 'Book read', 'Fun juggle', 'Drm Review',  'Early phone', 'Apnea practiced', 'Launch Squats Widget', 'Juggling tech sessions', 'Podcast finished', 'Janki used', 'Unusual experience', 'Anki created', 'Apnea apb', 'Launch Situps Widget', 'Writing sessions', 'Educational video watched', 'Filmed juggle', 'Meditations', 'Anki mydis done', 'Apnea spb', 'Launch Pushups Widget', 'UC post', 'Article read', 'Inspired juggle', 'Kind stranger', 'Health learned', 'Lung stretch', 'Cardio sessions', 'AI tool', 'Read academic', 'Juggle goal', 'Broke record', 'Took pills', 'None', 'Good posture',  'Drew', 'Language studied', 'None', 'None', 'None', 'None', 'Flossed', 'Question asked', 'Music listen', 'None', 'None', 'None', 'Todos done', 'None', 'None', 'None'
+            'Unique juggle', 'Juggling record broke', 'Dream acted', 'Sleep watch', 'Apnea walked', 'Cold Shower Widget', 'Programming sessions', 'Book read', 'Create juggle', 'Fun juggle', 'Drm Review',  'Early phone', 'Apnea practiced', 'Launch Squats Widget', 'Juggling tech sessions', 'Podcast finished', 'Song juggle', 'Janki used', 'Lucidity trained', 'Anki created', 'Apnea apb', 'Launch Situps Widget', 'Writing sessions', 'Educational video watched', 'None', 'Filmed juggle', 'Unusual experience', 'Anki mydis done', 'Apnea spb', 'Launch Pushups Widget', 'UC post', 'Article read', 'None', 'Inspired juggle', 'Meditations', 'Health learned', 'Lung stretch', 'Cardio sessions', 'AI tool', 'Read academic', 'None', 'Juggle goal', 'Kind stranger', 'Took pills', 'None', 'Good posture',  'Drew', 'Language studied', 'None', 'None', 'Broke record', 'Flossed', 'None', 'HIT', 'Question asked', 'Music listen', 'None', 'None', 'Grumpy blocker', 'None', 'Todos done', 'None', 'None', 'Memory practice'
             ]
 
         habitsdb = make_json(obsidian_dir+'habitsdb.txt')
@@ -108,14 +118,19 @@ class IconGrid(QWidget):
 
         return icons_and_scripts
 
+
+
+
+
+    # In your init_ui method
     def init_ui(self):
         grid_layout = QGridLayout()
         self.setLayout(grid_layout)
         icons_and_scripts = self.get_icons_and_scripts()
-        num_columns, num_rows, index = 8, 7, 0
+        num_columns, num_rows, index = 8, 8, 0
         self.buttons = []
 
-        self.total_label = QLabel()
+        self.total_label = ClickableLabel()
         grid_layout.addWidget(self.total_label, 0, num_columns - 1)
         self.update_total()
 
@@ -128,6 +143,7 @@ class IconGrid(QWidget):
                         button.setIcon(QIcon(icon))
                         button.setIconSize(QSize(64, 64))
                         button.clicked.connect(lambda checked, a=arg: self.increment_habit(a))
+                        button.setFocusPolicy(Qt.NoFocus)
                         grid_layout.addWidget(button, row, col)
                         self.buttons.append(button)
                     else:
@@ -276,20 +292,54 @@ class IconGrid(QWidget):
                     last_30_days_count += adjust_habit_count(inner_dict[date_str], arg)
                 last_30_days_total += last_30_days_count
 
-        current_date_streak, current_date_antistreak, longest_streak_record, longest_antistreak_record = get_streak_numbers()
+        current_date_streak, current_date_antistreak, longest_streak_record, longest_antistreak_record, highest_net_streak_record, lowest_net_streak_record = get_streak_numbers(False)
+
         net_streak = current_date_streak - current_date_antistreak
-        streak_text = f"{net_streak}\ns {current_date_streak}:{longest_streak_record}\nas {current_date_antistreak}:{longest_antistreak_record}\n"
+        streak_text = f"{net_streak}:{lowest_net_streak_record}:{highest_net_streak_record}\ns {current_date_streak}:{longest_streak_record}\nas {current_date_antistreak}:{longest_antistreak_record}\n"
         self.total_label.setText(f"{streak_text}{today_total}|{last_7_days_total / 7:.1f}|{last_30_days_total / 30:.1f}")
 
         #write a json file that has net streak, current streak, longest streak, current antistreak, longest antistreak
         streaks_dir = os.path.expanduser(obsidian_dir+'/tail/streaks.txt')
+        last_7_days_average = last_7_days_total / 7
+        # last_7_days_average rounded to one decimal place
+        last_7_days_average = math.floor(last_7_days_average * 10 + 0.5) / 10
+        last_30_days_average = last_30_days_total / 30
+        # last_30_days_average rounded to one decimal place
+        last_30_days_average = math.floor(last_30_days_average * 10 + 0.5) / 10
         with open(streaks_dir, 'w') as f:
-            json.dump({"net_streak": net_streak, "current_streak": current_date_streak, "longest_streak": longest_streak_record, "current_antistreak": current_date_antistreak, "longest_antistreak": longest_antistreak_record}, f, indent=4, sort_keys=True)
+            json.dump({"net_streak": net_streak, "highest_net_streak_record":highest_net_streak_record,"lowest_net_streak_record":lowest_net_streak_record,"current_streak": current_date_streak, "longest_streak": longest_streak_record, "current_antistreak": current_date_antistreak, "longest_antistreak": longest_antistreak_record,"today_total":today_total,"last_7_days_average":last_7_days_average,"last_30_days_average":last_30_days_average}, f, indent=4, sort_keys=True)
+    
+def get_icon_image_based_on_theme(current_theme):
+    if current_theme == "Moe-Dark":
+        icon_path = '/home/lunkwill/projects/py_habits_widget/icons/Screenshot_20231124_181238.png'
+    elif current_theme == "E5150-Orange":
+        icon_path = '/home/lunkwill/projects/py_habits_widget/icons/Screenshot_20231124_181238.png'
+    elif current_theme == "spectrum-mawsitsit":
+        icon_path = '/home/lunkwill/projects/py_habits_widget/icons/Screenshot_20231217_084422.png'
+    elif current_theme == "Shadows-Global":
+        icon_path = '/home/lunkwill/projects/py_habits_widget/icons/Screenshot_20231203_091003.png'
+    elif current_theme == "spectrum-strawberryquartz":
+        icon_path = '/home/lunkwill/projects/py_habits_widget/icons/Screenshot_20231124_181238.png'
+    elif current_theme == "Neon-Knights-Yellow":
+        icon_path = '/home/lunkwill/projects/py_habits_widget/icons/Screenshot_20231124_234618.png'
+    elif current_theme == "Glassy":
+        icon_path = '/home/lunkwill/projects/py_habits_widget/icons/Screenshot_20231124_181238.png'
+    # else :
+    #     icon_path = '/home/lunkwill/projects/py_habits_widget/icons/redgoldpainthd/Screenshot_20231124_181238.png'
 
-
-
+    return icon_path
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
+
+    with open('/home/lunkwill/projects/tail/kde_theme.txt', 'r') as f:
+        current_theme = f.read().strip()
+
+    icon_path = get_icon_image_based_on_theme(current_theme)
+
+    # Set the application icon
+    app.setWindowIcon(QIcon(icon_path))  # Replace with your icon file path
+
     icon_grid = IconGrid()
+
     sys.exit(app.exec_())

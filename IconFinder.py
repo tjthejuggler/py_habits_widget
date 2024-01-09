@@ -45,7 +45,14 @@ class IconFinder:
             'Inspired juggle': 'information4_sc49',
             'Read academic': 'charts1_sc1',
             'Lung stretch': 'two_directions_left_right',
-            'Drm Review': 'anchor6_sc48'
+            'Drm Review': 'anchor6_sc48',
+            'Unique juggle':'animal_cat_print',
+            'Create juggle':'animal_butterfly5_sc48',
+            'Song juggle':'music_cleft',
+            'Memory practice':'diskette4',
+            'Grumpy blocker':'lock_heart',
+            'Lucidity trained':'train8_sc43',
+            'HIT':'animal_crocodile_sc43',
         }
 
         # Create a dictionary with the reverse mapping from icons to activities
