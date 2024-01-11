@@ -9,6 +9,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 
+import plotly.graph_objs as go
+from plotly.subplots import make_subplots
+
 def make_json(directory):
     directory = os.path.expanduser(directory)
     with open(directory, 'r') as f:
@@ -111,7 +114,18 @@ def adjust_habit_count(count, habit_name):
         return math.floor(count / 3 + 0.5)
     else:
         return count
-    
+
+def get_best_streak_custom_date(inner_dict, target_date):
+    best_streak = 0
+    sorted_dates = [d for d in inner_dict.keys() if d <= target_date]
+    sorted_dates.sort(reverse=True)
+    for index, date_str in enumerate(sorted_dates):
+        if inner_dict[date_str] == 0:
+            break
+        else:
+            best_streak += 1
+    return best_streak
+
 def find_longest_streaks_and_antistreaks(start_date, end_date, activities, habitsdb, show_graph):
     date_format = '%Y-%m-%d'
     start_date_obj = datetime.strptime(start_date, date_format).date()
@@ -138,9 +152,13 @@ def find_longest_streaks_and_antistreaks(start_date, end_date, activities, habit
 
     daily_total_points = []
 
-    longest_streaks = {activity: 0 for activity in activities} #new for best ever
+    #longest_streaks = {activity: 0 for activity in activities} #new for best ever
 
     daily_best_streaks = [] #new for best ever
+
+    daily_best_streak_habit_count = [] #new for best ever
+
+    highest_days_since_zero_so_far = {activity: 0 for activity in activities}
 
     daily_habits_count = []
 
@@ -157,22 +175,29 @@ def find_longest_streaks_and_antistreaks(start_date, end_date, activities, habit
         habits_count = sum(1 for habit, inner_dict in habitsdb.items() if str(current_date) in inner_dict)
         daily_habits_count.append(habits_count)
 
+        current_all_time_best_streaks = {activity: 0 for activity in activities} #new for best ever
+        habits_currently_all_time_besting = 0 #new for best ever
+
         best_streaks_sum = 0 #new for best ever
         for activity in activities:
             inner_dict = habitsdb[activity]
             days_since_not_zero = get_days_since_not_zero_custom_date(inner_dict, current_date_str)
             total_days_since_not_zero += days_since_not_zero
             days_since_zero = get_days_since_zero_custom_date(inner_dict, current_date_str)
+
             total_days_since_zero += days_since_zero
 
-            #I DONT THINK THIS IS ACTUALLY DOING WHAT I WANT IT TO DO
-            #IT SHOULD BE GETTING THE TOTAL OF CURRENT ALL TIME BEST STREAKS
-            #ANOTHER THING I WANT IS TO GET THE TOTAL OF HABITS IM ALLTIME BESTING AT ANY GIVEN TIME
-            longest_streaks[activity] = max(longest_streaks[activity], days_since_zero) #new for best ever
-            best_streaks_sum += longest_streaks[activity] #new for best ever
+            best_streak_up_until_current_date = get_best_streak_custom_date(inner_dict, current_date_str)
+            highest_days_since_zero_so_far[activity] = max(highest_days_since_zero_so_far[activity], days_since_zero)
+            if highest_days_since_zero_so_far[activity] <= days_since_zero: #new for best ever
+                current_all_time_best_streaks[activity] = days_since_zero #new for best ever
+                habits_currently_all_time_besting += 1 #new for best ever
+
+        best_streaks_sum = sum(current_all_time_best_streaks.values()) #new for best ever
 
         # Append total sum of best ever streaks to list
         daily_best_streaks.append(best_streaks_sum)
+        daily_best_streak_habit_count.append(habits_currently_all_time_besting)
 
         # Calculate net streak
         net_streak = total_days_since_zero - total_days_since_not_zero
@@ -239,6 +264,7 @@ def find_longest_streaks_and_antistreaks(start_date, end_date, activities, habit
 
         # When plotting, use the dates for the x-axis and daily_habits_count for the y-axis
         ax1b.plot(dates, daily_habits_count, color='tab:red', label='Habits count')
+        ax1b.plot(dates, daily_best_streak_habit_count, color='tab:gray', label='Best streak habits count')
 
         # Set the y-axis label
         ax1b.set_ylabel('Habits count', color='tab:red')
@@ -249,8 +275,6 @@ def find_longest_streaks_and_antistreaks(start_date, end_date, activities, habit
         # Add a legend
         ax1b.legend(loc='upper right')
 
-
-
         # Set the x-axis ticks and labels
         ax1.xaxis.set_major_locator(mdates.MonthLocator(interval=3))  # set x-ticks to be every 3 months
         ax1.xaxis.set_major_formatter(mdates.DateFormatter('%m/%y'))  # format x-ticks as 'MM/YY'
@@ -260,6 +284,85 @@ def find_longest_streaks_and_antistreaks(start_date, end_date, activities, habit
 
         fig1.tight_layout()  # otherwise the right y-label is slightly clipped
         plt.show()
+
+
+
+
+
+        # # Create a figure with secondary y-axis
+        # fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+        # # Add traces for streaks
+        # fig.add_trace(go.Scatter(x=dates, y=daily_streaks, name='Streaks', line=dict(color='blue')), secondary_y=False)
+        # fig.add_trace(go.Scatter(x=dates, y=daily_antistreaks, name='Anti-streaks', line=dict(color='orange')), secondary_y=False)
+        # fig.add_trace(go.Scatter(x=dates, y=daily_net_streaks, name='Net streaks', line=dict(color='green')), secondary_y=False)
+        # fig.add_trace(go.Scatter(x=dates, y=daily_best_streaks, name='Best streaks', line=dict(color='purple')), secondary_y=False)
+
+        # # Add traces for habit counts
+        # fig.add_trace(go.Scatter(x=dates, y=daily_habits_count, name='Habits count', line=dict(color='red')), secondary_y=True)
+        # fig.add_trace(go.Scatter(x=dates, y=daily_best_streak_habit_count, name='Best streak habits count', line=dict(color='gray')), secondary_y=True)
+
+        # # Set x-axis title
+        # fig.update_xaxes(title_text="Date")
+
+        # # Set y-axes titles
+        # fig.update_yaxes(title_text="Streaks", secondary_y=False)
+        # fig.update_yaxes(title_text="Habits count", secondary_y=True)
+
+        # # Update layout and show plot
+        # fig.update_layout(title_text="Streaks and Habits Count Over Time")
+        # fig.show()
+
+
+
+        # Create a figure with secondary y-axis
+        fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+        # Add traces for streaks
+        fig.add_trace(go.Scatter(x=dates, y=daily_streaks, name='Streaks', line=dict(color='blue')), secondary_y=False)
+        fig.add_trace(go.Scatter(x=dates, y=daily_antistreaks, name='Anti-streaks', line=dict(color='orange')), secondary_y=False)
+        fig.add_trace(go.Scatter(x=dates, y=daily_net_streaks, name='Net streaks', line=dict(color='green')), secondary_y=False)
+        fig.add_trace(go.Scatter(x=dates, y=daily_best_streaks, name='Best streaks', line=dict(color='purple')), secondary_y=False)
+
+        # Add traces for habit counts
+        fig.add_trace(go.Scatter(x=dates, y=daily_habits_count, name='Habits count', line=dict(color='red')), secondary_y=True)
+        fig.add_trace(go.Scatter(x=dates, y=daily_best_streak_habit_count, name='Best streak habits count', line=dict(color='gray')), secondary_y=True)
+
+        # Add traces for total points and smoothed total points
+        fig.add_trace(go.Scatter(x=dates, y=daily_total_points, name='Daily Total Points', line=dict(color='white')), secondary_y=True)
+        fig.add_trace(go.Scatter(x=dates, y=smoothed_total_points_weekly, name='Weekly Smoothed Total Points', line=dict(color='black')), secondary_y=True)
+        fig.add_trace(go.Scatter(x=dates, y=smoothed_total_points_monthly, name='Monthly Smoothed Total Points', line=dict(color='gray')), secondary_y=True)
+
+        # Color different regions of the background
+        colors = ['red', 'orange', 'green', 'blue', 'pink', 'yellow', 'white']
+        ranges = [0.5, 13.5, 20.5, 30.5, 41.5, 48.5, 55.5, 62.5]
+
+        # Set x-axis title
+        fig.update_xaxes(title_text="Date")
+
+        # Set y-axes titles
+        fig.update_yaxes(title_text="Streaks and Total Points", secondary_y=False)
+
+        # Update the secondary y-axis to have ticks based on 'ranges' list
+        fig.update_yaxes(title_text="Habits count", tickvals=ranges, secondary_y=True)
+
+
+
+        for i in range(len(ranges) - 1):
+            fig.add_hrect(
+                y0=ranges[i], y1=ranges[i+1],
+                fillcolor=colors[i], opacity=0.5,
+                layer="below", line_width=0,
+                secondary_y=True  # This ensures the coloring is based on the secondary y-axis
+            )
+
+        # Update layout and show plot
+        fig.update_layout(title_text="Streaks, Habits Count, and Total Points Over Time")
+        fig.show()
+
+
+
+
 
         # Create a new figure for the smoothed total points
         fig2, ax2 = plt.subplots()
@@ -276,21 +379,9 @@ def find_longest_streaks_and_antistreaks(start_date, end_date, activities, habit
         ax2.xaxis.set_major_locator(mdates.MonthLocator(interval=3))  # set x-ticks to be every 3 months
         ax2.xaxis.set_major_formatter(mdates.DateFormatter('%m/%y'))  # format x-ticks as 'MM/YY'
 
-
-
-        # # Plot daily total points
-        # color = 'white'
-        # ax2.plot(daily_total_points, color=color, linestyle='-', label='Daily total points')  # solid line
-
-        # # Plot weekly smoothed total points
-        # color = 'black'
-        # ax2.plot(smoothed_total_points_weekly, color=color, linestyle='-', label='Weekly smoothed total points')  # dashed line
-
-        # # Plot monthly smoothed total points
-        # color = 'gray'
-        # ax2.plot(smoothed_total_points_monthly, color=color, linestyle='-', label='Monthly smoothed total points')  # dash-dot line
-        # # Define the total habit count ranges
-        ranges = [0, 13, 20, 30, 41, 48, 55, 62]
+        #ranges = [0, 13, 20, 30, 41, 48, 55, 62]
+        ranges = [0.5, 13.5, 20.5, 30.5, 41.5, 48.5, 55.5, 62.5]
+        #ranges = [1, 14, 21, 31, 42, 49, 56, 63]
         colors = ['red', 'orange', 'green', 'blue', 'pink', 'yellow', 'white']
 
         # Set the y-axis ticks
@@ -299,8 +390,6 @@ def find_longest_streaks_and_antistreaks(start_date, end_date, activities, habit
         # Color different regions of the background
         for i in range(len(ranges) - 1):
             ax2.axhspan(ranges[i], ranges[i+1], facecolor=colors[i], alpha=0.5)
-
-
 
         ax2.legend()  # Add a legend
 
