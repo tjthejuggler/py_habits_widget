@@ -340,13 +340,32 @@ def find_longest_streaks_and_antistreaks(start_date, end_date, activities, habit
         #here!!!
         #daily_streaks_ordered = #try making this be ordered so that we dont need special scroll boxes for it down below. similarly we could order distance from bests in hover lists. obviosuly same with antistreaks
 
+        # Initialize a dictionary to store the ordered list of streaks for each date
+
+        def get_streak_number(streak):
+            return int(streak.split('(')[0].split(':')[1])
+
+        ordered_streaks_per_date = {}
+        # Iterate over the dates in currently_streaking_habits
+        for date, streaks in currently_streaking_habits.items():
+            ordered_streaks = sorted(streaks, key=get_streak_number, reverse=True)
+            ordered_streaks_per_date[date] = ordered_streaks
+        # today = datetime.now().strftime('%Y-%m-%d')
+        # print(ordered_streaks_per_date[today])
+
+        ordered_antistreaks_per_date = {}
+        for date, antistreaks in currently_antistreaking_habits.items():
+            ordered_antistreaks = sorted(antistreaks, key=get_streak_number, reverse=True)
+            ordered_antistreaks_per_date[date] = ordered_antistreaks
+
+
         custom_hover_text_for_list_of_habits = create_hover_text(dates, daily_habits_count, list_of_new_habits)
         custom_hover_text_best_streaks = create_hover_text(dates, daily_best_streaks, habits_currently_besting)
         custom_hover_text_best_streak_habit_count = create_hover_text(dates, daily_best_streak_habit_count, habits_currently_besting)
         custom_hover_text_worst_anti_streaks = create_hover_text(dates, daily_worst_anti_streaks, habits_currently_worsting)
         custom_hover_text_worst_anti_streak_habit_count = create_hover_text(dates, daily_worst_anti_streak_habit_count, habits_currently_worsting)
-        custom_hover_text_currently_streaking_habits = create_hover_text(dates, daily_streaks, currently_streaking_habits)
-        custom_hover_text_currently_antistreaking_habits = create_hover_text(dates, daily_antistreaks, currently_antistreaking_habits)        
+        custom_hover_text_currently_streaking_habits = create_hover_text(dates, daily_streaks, ordered_streaks_per_date)
+        custom_hover_text_currently_antistreaking_habits = create_hover_text(dates, daily_antistreaks, ordered_antistreaks_per_date)        
 
         # Create a figure with secondary y-axis
         fig = make_subplots(specs=[[{"secondary_y": True}]])
@@ -471,16 +490,19 @@ def find_longest_streaks_and_antistreaks(start_date, end_date, activities, habit
                 secondary_y=True  # This ensures the coloring is based on the secondary y-axis
             )
 
+
         # Add an annotation on the right, centered vertically
         fig.add_annotation(
             x=1.07,   # X position slightly more than 1 (right of the plot area)
             y=0.5,    # Y position at 0.5 to center vertically
             xref="paper",  # Reference to the entire figure's area
             yref="paper",  # Reference to the entire figure's area
-            text="Interesting and useful stats\nmaybe even some sort of LLM observation or input",  # Your note text
+            text="Interesting and useful stats",  # Your note text
             showarrow=False,
             align="left"  # Align text to the left of the x position
         )
+
+
 
         # Adjust the margins to ensure there's space for the annotation
         fig.update_layout(margin=dict(r=120))  # Increase right margin
@@ -489,27 +511,16 @@ def find_longest_streaks_and_antistreaks(start_date, end_date, activities, habit
         fig.update_layout(title_text="Streaks, Habits Count, and Total Points Over Time")
         #fig.show()
 
+
+
         highest_date = max(currently_streaking_habits.keys(), key=lambda date: datetime.strptime(date, '%Y-%m-%d'))
 
-        distance_to_best_streak = "Content for text box 1..."
-        distance_to_worst_antistreak = "Content for text box 2..."
 
-        streaks = currently_streaking_habits[highest_date]
-
-        # Create a function to extract the streak number from a streak string
-        def get_streak_number(streak):
-            return int(streak.split('(')[-1].split(')')[0])
-
-        # Create an ordered list of streaks, with the highest ones on top
-        ordered_streaks = sorted(streaks, key=get_streak_number, reverse=True)
-        # Convert the ordered list of streaks to a multiline string
-        streak_list_longest_ordered = '\n'.join(ordered_streaks)
-        streak_list_longest_ordered = dcc.Textarea(value=streak_list_longest_ordered, style={'width': '100%', 'height': 200})
         ordered_antistreaks = sorted(currently_antistreaking_habits[highest_date], key=get_streak_number, reverse=True)
         antistreak_list_longest_ordered = '\n'.join(ordered_antistreaks)
 
         # app.run_server(debug=True)
-        dash_thread = threaded_dash_app.DashApp(fig, distance_to_best_streak, distance_to_worst_antistreak, streak_list_longest_ordered, antistreak_list_longest_ordered)
+        dash_thread = threaded_dash_app.DashApp(fig, ordered_streaks_per_date, ordered_antistreaks_per_date)
         dash_thread.start()
 
         url = "http://127.0.0.1:8050"
