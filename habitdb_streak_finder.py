@@ -12,6 +12,17 @@ import matplotlib.dates as mdates
 import plotly.graph_objs as go
 from plotly.subplots import make_subplots
 
+import dash
+import dash_core_components as dcc
+import dash_html_components as html
+from datetime import datetime, timedelta
+import pandas as pd
+from plotly.subplots import make_subplots
+import plotly.graph_objects as go
+
+import threaded_dash_app
+import webbrowser
+
 def make_json(directory):
     directory = os.path.expanduser(directory)
     with open(directory, 'r') as f:
@@ -326,6 +337,9 @@ def find_longest_streaks_and_antistreaks(start_date, end_date, activities, habit
         print('list_of_habits_len', len(list_of_habits))
         print('list_of_habits', list_of_habits)
 
+        #here!!!
+        #daily_streaks_ordered = #try making this be ordered so that we dont need special scroll boxes for it down below. similarly we could order distance from bests in hover lists. obviosuly same with antistreaks
+
         custom_hover_text_for_list_of_habits = create_hover_text(dates, daily_habits_count, list_of_new_habits)
         custom_hover_text_best_streaks = create_hover_text(dates, daily_best_streaks, habits_currently_besting)
         custom_hover_text_best_streak_habit_count = create_hover_text(dates, daily_best_streak_habit_count, habits_currently_besting)
@@ -333,10 +347,6 @@ def find_longest_streaks_and_antistreaks(start_date, end_date, activities, habit
         custom_hover_text_worst_anti_streak_habit_count = create_hover_text(dates, daily_worst_anti_streak_habit_count, habits_currently_worsting)
         custom_hover_text_currently_streaking_habits = create_hover_text(dates, daily_streaks, currently_streaking_habits)
         custom_hover_text_currently_antistreaking_habits = create_hover_text(dates, daily_antistreaks, currently_antistreaking_habits)        
-
-        
-
-
 
         # Create a figure with secondary y-axis
         fig = make_subplots(specs=[[{"secondary_y": True}]])
@@ -477,13 +487,37 @@ def find_longest_streaks_and_antistreaks(start_date, end_date, activities, habit
 
         # Update layout and show plot
         fig.update_layout(title_text="Streaks, Habits Count, and Total Points Over Time")
-        fig.show()
+        #fig.show()
 
+        highest_date = max(currently_streaking_habits.keys(), key=lambda date: datetime.strptime(date, '%Y-%m-%d'))
+
+        distance_to_best_streak = "Content for text box 1..."
+        distance_to_worst_antistreak = "Content for text box 2..."
+
+        streaks = currently_streaking_habits[highest_date]
+
+        # Create a function to extract the streak number from a streak string
+        def get_streak_number(streak):
+            return int(streak.split('(')[-1].split(')')[0])
+
+        # Create an ordered list of streaks, with the highest ones on top
+        ordered_streaks = sorted(streaks, key=get_streak_number, reverse=True)
+        # Convert the ordered list of streaks to a multiline string
+        streak_list_longest_ordered = '\n'.join(ordered_streaks)
+        streak_list_longest_ordered = dcc.Textarea(value=streak_list_longest_ordered, style={'width': '100%', 'height': 200})
+        ordered_antistreaks = sorted(currently_antistreaking_habits[highest_date], key=get_streak_number, reverse=True)
+        antistreak_list_longest_ordered = '\n'.join(ordered_antistreaks)
+
+        # app.run_server(debug=True)
+        dash_thread = threaded_dash_app.DashApp(fig, distance_to_best_streak, distance_to_worst_antistreak, streak_list_longest_ordered, antistreak_list_longest_ordered)
+        dash_thread.start()
+
+        url = "http://127.0.0.1:8050"
+        webbrowser.get('firefox').open_new_tab(url)
 
     return (longest_streak_record, longest_antistreak_record, 
             highest_net_streak_record, lowest_net_streak_record, 
             current_date_streak, current_date_antistreak)
-
 
 def get_streak_numbers(show_graph):
     # Example usage
