@@ -1,6 +1,5 @@
 import sys
-from PyQt5.QtWidgets import QApplication, QWidget, QGridLayout, QPushButton, QSpacerItem, QSizePolicy, QInputDialog, QLabel, QComboBox
-from PyQt5.QtWidgets import QDialog, QVBoxLayout
+from PyQt5.QtWidgets import QApplication, QWidget, QGridLayout, QPushButton, QSpacerItem, QSizePolicy, QInputDialog, QLabel, QComboBox, QDialog, QVBoxLayout, QCheckBox
 from PyQt5.QtGui import QPainter, QFont, QIcon
 from PyQt5.QtCore import QSize, Qt
 import matplotlib.pyplot as plt
@@ -17,6 +16,23 @@ import math
 import subprocess
 
 #change obsidian_dir to this for zenbook ~/Documents/obsidian_note_vault/noteVault
+
+class ButtonWithCheckbox(QWidget):
+    def __init__(self, activity, left_number, right_number, parent=None):
+        super().__init__(parent)
+        self.activity = activity
+        self.button = NumberedButton(left_number, right_number, self)
+        self.checkbox = QCheckBox(self)
+        self.checkbox.setFixedSize(20,20)  # Adjust the size of the checkbox as needed
+
+        # Create a grid layout
+        self.layout = QGridLayout(self)
+        self.layout.addWidget(self.button, 0, 0, Qt.AlignLeft)
+        self.layout.addWidget(self.checkbox, 0, 0, Qt.AlignTop | Qt.AlignRight)
+
+        # Remove margins and spacing
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout.setSpacing(0)
 
 with open('/home/lunkwill/projects/py_habits_widget/obsidian_dir.txt', 'r') as f:
     obsidian_dir = f.read().strip()
@@ -40,15 +56,16 @@ class NumberedButton(QPushButton):
 
 class ClickableLabel(QLabel):
     def mousePressEvent(self, event):
-        self.create_graph()
+        checked_activities = [button.activity for button in self.parent().button_with_checkboxes if button.checkbox.isChecked()]
+        self.create_graph(checked_activities)
 
-    def create_graph(self):
-        # Create your graph here
-        current_date_streak, current_date_antistreak, longest_streak_record, longest_antistreak_record, highest_net_streak_record, lowest_net_streak_record = get_streak_numbers(True)
+    def create_graph(self, checked_activities):
+        current_date_streak, current_date_antistreak, longest_streak_record, longest_antistreak_record, highest_net_streak_record, lowest_net_streak_record = get_streak_numbers(True, checked_activities)
 
 class IconGrid(QWidget):
     def __init__(self):
         super().__init__()
+        self.button_with_checkboxes = []
         self.init_ui()
 
     def get_icons_and_scripts(self):
@@ -111,7 +128,7 @@ class IconGrid(QWidget):
                 icon_finder = IconFinder()
                 icon = icon_finder.find_icon(activities[i])
                 icon_file = icon + '.png'
-                icons_and_scripts.append((icon_dir + icon_file, activities[i], left_number, right_number))
+                icons_and_scripts.append((icon_dir + icon_file, activities[i], activities[i], left_number, right_number))
 
             else:
                 icons_and_scripts.append(None)
@@ -128,24 +145,24 @@ class IconGrid(QWidget):
         self.setLayout(grid_layout)
         icons_and_scripts = self.get_icons_and_scripts()
         num_columns, num_rows, index = 8, 8, 0
-        self.buttons = []
+        #self.button_with_checkboxes = []
 
         self.total_label = ClickableLabel()
         grid_layout.addWidget(self.total_label, 0, num_columns - 1)
         self.update_total()
 
         for col in range(num_columns):
-            for row in range(1, num_rows + 1):  # Start from row 1 to accommodate the total_label
+            for row in range(1, num_rows + 1):
                 if index < len(icons_and_scripts):
                     if icons_and_scripts[index] is not None:
-                        icon, arg, left_number, right_number = icons_and_scripts[index]
-                        button = NumberedButton(left_number, right_number, self)
-                        button.setIcon(QIcon(icon))
-                        button.setIconSize(QSize(64, 64))
-                        button.clicked.connect(lambda checked, a=arg: self.increment_habit(a))
-                        button.setFocusPolicy(Qt.NoFocus)
-                        grid_layout.addWidget(button, row, col)
-                        self.buttons.append(button)
+                        icon, arg, activity, left_number, right_number = icons_and_scripts[index]
+                        button_with_checkbox = ButtonWithCheckbox(activity, left_number, right_number, self)
+                        button_with_checkbox.button.setIcon(QIcon(icon))
+                        button_with_checkbox.button.setIconSize(QSize(64, 64))
+                        button_with_checkbox.button.clicked.connect(lambda checked, a=arg: self.increment_habit(a))
+                        button_with_checkbox.button.setFocusPolicy(Qt.NoFocus)
+                        grid_layout.addWidget(button_with_checkbox, row, col)
+                        self.button_with_checkboxes.append(button_with_checkbox)
                     else:
                         spacer = QSpacerItem(64, 64, QSizePolicy.Fixed, QSizePolicy.Fixed)
                         grid_layout.addItem(spacer, row, col)
@@ -155,6 +172,7 @@ class IconGrid(QWidget):
 
     def increment_habit(self, argument):
         write_updated_habitsdb_to_add = False
+        write_updated_personal_records = False
         habitsdb_to_add_dir = obsidian_dir+'habitsdb_to_add.txt'
         habitsdb_to_add = make_json(habitsdb_to_add_dir)
         if "Widget" in argument:
@@ -247,8 +265,8 @@ class IconGrid(QWidget):
         for index, item in enumerate(icons_and_scripts):
             if item is not None:
                 print("item", item)
-                icon, _, left_number, right_number = item
-                self.buttons[button_index].setIcon(QIcon(icon))
+                icon, _, _, left_number, right_number = item
+                self.button_with_checkboxes[button_index].button.setIcon(QIcon(icon))
                 button_index += 1
 
     def update_total(self):
@@ -257,7 +275,7 @@ class IconGrid(QWidget):
 
         for item in icons_and_scripts:
             if item is not None:
-                icon, arg, left_number, right_number = item
+                icon, arg, activity, left_number, right_number = item
                 
                 habitsdb = make_json(obsidian_dir+'habitsdb.txt')
                 habitsdb_to_add = make_json(obsidian_dir+'habitsdb_to_add.txt')
@@ -292,7 +310,7 @@ class IconGrid(QWidget):
                     last_30_days_count += adjust_habit_count(inner_dict[date_str], arg)
                 last_30_days_total += last_30_days_count
 
-        current_date_streak, current_date_antistreak, longest_streak_record, longest_antistreak_record, highest_net_streak_record, lowest_net_streak_record = get_streak_numbers(False)
+        current_date_streak, current_date_antistreak, longest_streak_record, longest_antistreak_record, highest_net_streak_record, lowest_net_streak_record = get_streak_numbers(False, [])
 
         net_streak = current_date_streak - current_date_antistreak
         streak_text = f"{net_streak}:{lowest_net_streak_record}:{highest_net_streak_record}\ns {current_date_streak}:{longest_streak_record}\nas {current_date_antistreak}:{longest_antistreak_record}\n"

@@ -65,7 +65,7 @@ class DashApp(threading.Thread):
 
     def run(self):
         # Adjust the height of the graph
-        self.fig.update_layout(height=700)  # Adjust the height as needed
+        self.fig.update_layout(height=850)  # Adjust the height as needed
 
         # Create a Dash app
         app = dash.Dash(__name__)
@@ -108,17 +108,28 @@ class DashApp(threading.Thread):
             Input('reset-button', 'n_clicks')]
         )
         def display_click_data(clickData, n_clicks):
-            if n_clicks > 0:
+            if dash.callback_context.triggered is not None:
+                ctx = dash.callback_context
+
+                if not ctx.triggered:
+                    return "Click on a point in the graph", dash.no_update, dash.no_update, dash.no_update, dash.no_update
+                else:
+                    button_id = ctx.triggered[0]['prop_id'].split('.')[0]
+            else:
+                button_id = None
+
+            if button_id == 'reset-button':
                 point_date = datetime.today().date().strftime('%Y-%m-%d')
-            elif clickData is not None:
+            elif button_id == 'your-graph' and clickData is not None:
                 point_date = clickData['points'][0]['x']
             else:
                 return "Click on a point in the graph", dash.no_update, dash.no_update, dash.no_update, dash.no_update
-
+            
             new_text1 = get_list_distance_from_best_streak(self, self.ordered_streaks_per_date, point_date)
             new_text2 = get_list_distance_from_best_streak(self, self.ordered_antistreaks_per_date, point_date)
             new_text3 = get_list_from_dict_and_date(self, self.ordered_streaks_per_date, point_date)
             new_text4 = get_list_from_dict_and_date(self, self.ordered_antistreaks_per_date, point_date)
             return f"{point_date}", new_text1, new_text2, new_text3, new_text4
         # Run the Dash app
+        #display_click_data(None, 0)
         app.run_server(debug=False)  # Set debug to False
