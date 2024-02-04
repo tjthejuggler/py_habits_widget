@@ -5,6 +5,8 @@ from dash.dependencies import Input, Output
 import threading
 
 from datetime import datetime, timedelta
+import pandas as pd
+
 
 def get_list_from_dict_and_date(self, ordered_streaks_per_date, date):
     streaks = ordered_streaks_per_date[date]
@@ -44,24 +46,16 @@ def get_list_distance_from_best_streak(self, ordered_streaks_per_date, date):
 class DashApp(threading.Thread):
 
 
-    def __init__(self, fig, ordered_streaks_per_date, ordered_antistreaks_per_date):
+    def __init__(self, fig, ordered_streaks_per_date, ordered_antistreaks_per_date, dates, daily_streaks, daily_antistreaks, records):
         threading.Thread.__init__(self)
         self.daemon = True
         self.ordered_streaks_per_date = ordered_streaks_per_date
         self.ordered_antistreaks_per_date = ordered_antistreaks_per_date
+        self.dates = dates
+        self.daily_streaks = daily_streaks
+        self.daily_antistreaks = daily_antistreaks
+        self.records = records
         self.fig = fig
-
-        #date = max(ordered_streaks_per_date.keys(), key=lambda date: datetime.strptime(date, '%Y-%m-%d'))
-
-
-        
-        #self.text3 = get_list_from_dict_and_date(self, ordered_streaks_per_date, date)
-        
-
-
-        #self.text4 = text4
-
-
 
     def run(self):
         # Adjust the height of the graph
@@ -72,6 +66,50 @@ class DashApp(threading.Thread):
 
         app.layout = html.Div([
             html.Button('Reset to Today', id='reset-button', n_clicks=0),
+            #make a div that shows self.highest_points_date, self.highest_points
+            html.Button('Toggle Details', id='toggle-button', n_clicks=0),
+            html.Div([
+                html.Div("Today:", style={'display': 'inline-block', 'padding-right': '10px'}),
+                html.Div(str(self.daily_streaks[-1]), style={'display': 'inline-block', 'padding-right': '20px'}),
+                html.Div(" | ", style={'display': 'inline-block', 'padding-right': '10px'}),
+                html.Div(str(self.daily_antistreaks[-1]), style={'display': 'inline-block', 'padding-right': '20px'}),
+                html.Div(" | ", style={'display': 'inline-block', 'padding-right': '10px'}),
+                html.Div(str(int(self.daily_streaks[-1])-int(self.daily_antistreaks[-1])), style={'display': 'inline-block', 'padding-right': '20px'})
+            ], style={'white-space': 'nowrap'}),
+            html.Div(
+                id='details-div',
+                children=[
+                    html.Div(
+                        [
+                            # Create a section for each period: All-Time, Last Week, Last Month, Last Year
+                            html.Div(
+                                [
+                                    html.H5(period.replace("_", " ").title(), style={'text-align': 'center'}),
+                                    # Points
+                                    html.P(f"Highest Points: {self.records['points']['highest'][period]['value']} on {self.records['points']['highest'][period]['date']}", style={'text-align': 'center'}),
+                                    html.P(f"Lowest Points: {self.records['points']['lowest'][period]['value']} on {self.records['points']['lowest'][period]['date']}", style={'text-align': 'center'}),
+                                    # Unique Habits
+                                    html.P(f"Highest Unique Habits: {self.records['unique_habits']['highest'][period]['value']} on {self.records['unique_habits']['highest'][period]['date']}", style={'text-align': 'center'}),
+                                    html.P(f"Lowest Unique Habits: {self.records['unique_habits']['lowest'][period]['value']} on {self.records['unique_habits']['lowest'][period]['date']}", style={'text-align': 'center'}),
+                                    # Streaks
+                                    html.P(f"Highest Streak: {self.records['streak']['highest'][period]['value']} on {self.records['streak']['highest'][period]['date']}", style={'text-align': 'center'}),
+                                    html.P(f"Lowest Streak: {self.records['streak']['lowest'][period]['value']} on {self.records['streak']['lowest'][period]['date']}", style={'text-align': 'center'}),
+                                    # Anti-Streaks
+                                    html.P(f"Highest Anti-Streak: -{self.records['antistreak']['highest'][period]['value']} on {self.records['antistreak']['highest'][period]['date']}", style={'text-align': 'center'}),
+                                    html.P(f"Lowest Anti-Streak: -{self.records['antistreak']['lowest'][period]['value']} on {self.records['antistreak']['lowest'][period]['date']}", style={'text-align': 'center'}),
+                                    # Net Streaks
+                                    html.P(f"Highest Net Streak: {self.records['net_streak']['highest'][period]['value']} on {self.records['net_streak']['highest'][period]['date']}", style={'text-align': 'center'}),
+                                    html.P(f"Lowest Net Streak: {self.records['net_streak']['lowest'][period]['value']} on {self.records['net_streak']['lowest'][period]['date']}", style={'text-align': 'center'}),
+                                ],
+                                style={'width': '24%', 'display': 'inline-block', 'vertical-align': 'top', 'margin-right': '1%'} if period != 'last_year' else {'width': '24%', 'display': 'inline-block', 'vertical-align': 'top'}
+                            ) for period in ['all_time', 'last_week', 'last_month', 'last_year']
+                        ],
+                        style={'box-shadow': '0 4px 8px 0 rgba(0,0,0,0.2)', 'transition': '0.3s', 'padding': '20px', 'border-radius': '5px'}
+                    ),
+                ],
+                style={'display': 'none'}  # Start out invisible
+            ),
+            html.Div(id='selected-date'),
             dcc.Graph(id='your-graph', figure=self.fig),
             html.Div(id='click-data'),  # Div to display the annotation
 
@@ -97,7 +135,56 @@ class DashApp(threading.Thread):
         ])
 
         #from datetime import datetime
+        @app.callback(
+            Output('selected-date', 'children'),
+            [Input('your-graph', 'clickData'),
+            Input('reset-button', 'n_clicks')]
+        )
+        def update_selected_date(clickData, n_clicks):
+            ctx = dash.callback_context
+            # streak_difference_between_selected_and_previous = self.daily_streaks[clickData['points'][0]['x']] - self.daily_streaks[clickData['points'][0]['x'] - timedelta(days=1)]
+            date_streaks = dict(zip(self.dates, self.daily_streaks))
+            date_antistreaks = dict(zip(self.dates, self.daily_antistreaks))
+            # print(date_streaks)
+            # print(self.daily_streaks)
+            date_selected = False
 
+            if not ctx.triggered:
+                return 'No date selected'
+            else:
+                button_id = ctx.triggered[0]['prop_id'].split('.')[0]
+
+            if button_id == 'reset-button':
+                date_selected = datetime.today().date().strftime("%Y-%m-%d")
+                date_selected = datetime.strptime(date_selected, '%Y-%m-%d')
+                #return f'Selected date: {datetime.today().date().strftime("%Y-%m-%d")}'
+
+
+            # 1/23/24 THIS NEEDS CHECKED AND IF IT WORKS THEN OTHER STUFF LIKE IT NEEDS HOOKED UP
+
+            elif button_id == 'your-graph' and clickData is not None:
+                date_selected = datetime.strptime(clickData['points'][0]['x'], '%Y-%m-%d')
+
+            if date_selected:
+                previous_date = date_selected - timedelta(days=1)
+                # Convert selected_date and previous_date to Timestamp objects
+                selected_date_ts = pd.Timestamp(date_selected)
+                previous_date_ts = pd.Timestamp(previous_date)
+                
+                # Check if date_selected_ts and previous_date_ts are in date_streaks
+                if selected_date_ts not in date_streaks or previous_date_ts not in date_streaks:
+                    return f'Date not found: {selected_date_ts} or {previous_date_ts}'
+                
+                streak_difference_between_selected_and_previous = date_streaks[selected_date_ts] - date_streaks[previous_date_ts]
+                antistreak_difference_between_selected_and_previous = date_antistreaks[previous_date_ts] - date_antistreaks[selected_date_ts]
+                today_net = date_streaks[selected_date_ts] - date_antistreaks[selected_date_ts]
+                yesterday_net = date_streaks[previous_date_ts] - date_antistreaks[previous_date_ts]
+                net_difference_between_selected_and_previous = today_net - yesterday_net
+                #remove time from date
+                date_selected = date_selected.strftime("%Y-%m-%d")
+                return f'Selected date: {date_selected}\n-----Streak Diff: {str(streak_difference_between_selected_and_previous)}({date_streaks[selected_date_ts]}-{date_streaks[previous_date_ts]})-----Anti-streak Diff: {str(antistreak_difference_between_selected_and_previous)}({date_antistreaks[selected_date_ts]}-{date_antistreaks[previous_date_ts]})-----Net Streak Diff: {str(net_difference_between_selected_and_previous)}({today_net}-{yesterday_net})'
+            else:
+                return 'No date selected'
         @app.callback(
             Output('click-data', 'children'),
             Output('my-textbox1', 'children'),
@@ -130,6 +217,18 @@ class DashApp(threading.Thread):
             new_text3 = get_list_from_dict_and_date(self, self.ordered_streaks_per_date, point_date)
             new_text4 = get_list_from_dict_and_date(self, self.ordered_antistreaks_per_date, point_date)
             return f"{point_date}", new_text1, new_text2, new_text3, new_text4
+        
+
+        @app.callback(
+            Output('details-div', 'style'),
+            [Input('toggle-button', 'n_clicks')],
+        )
+        def toggle_div_visibility(n_clicks):
+            if n_clicks % 2 == 0:  # If even, div remains hidden
+                return {'display': 'none'}
+            else:  # If odd, show the div
+                return {'box-shadow': '0 4px 8px 0 rgba(0,0,0,0.2)', 'transition': '0.3s', 'padding': '20px', 'border-radius': '5px'}
+
         # Run the Dash app
         #display_click_data(None, 0)
         app.run_server(debug=False)  # Set debug to False

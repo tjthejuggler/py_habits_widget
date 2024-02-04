@@ -40,6 +40,7 @@ with open('/home/lunkwill/projects/py_habits_widget/obsidian_dir.txt', 'r') as f
 def notify(message):
     msg = "notify-send ' ' '"+message+"'"
     os.system(msg)
+    
 class NumberedButton(QPushButton):
     def __init__(self, left_number, right_number, *args, **kwargs):
         super(NumberedButton, self).__init__(*args, **kwargs)
@@ -60,7 +61,7 @@ class ClickableLabel(QLabel):
         self.create_graph(checked_activities)
 
     def create_graph(self, checked_activities):
-        current_date_streak, current_date_antistreak, longest_streak_record, longest_antistreak_record, highest_net_streak_record, lowest_net_streak_record = get_streak_numbers(True, checked_activities)
+        current_date_streak, current_date_antistreak, longest_streak_record, longest_antistreak_record, highest_net_streak_record, lowest_net_streak_record, week_average, month_average, year_average, overall_average = get_streak_numbers(True, checked_activities)
 
 class IconGrid(QWidget):
     def __init__(self):
@@ -148,7 +149,7 @@ class IconGrid(QWidget):
         #self.button_with_checkboxes = []
 
         self.total_label = ClickableLabel()
-        grid_layout.addWidget(self.total_label, 0, num_columns - 1)
+        grid_layout.addWidget(self.total_label, 0, num_columns)
         self.update_total()
 
         for col in range(num_columns):
@@ -310,11 +311,11 @@ class IconGrid(QWidget):
                     last_30_days_count += adjust_habit_count(inner_dict[date_str], arg)
                 last_30_days_total += last_30_days_count
 
-        current_date_streak, current_date_antistreak, longest_streak_record, longest_antistreak_record, highest_net_streak_record, lowest_net_streak_record = get_streak_numbers(False, [])
+        current_date_streak, current_date_antistreak, longest_streak_record, longest_antistreak_record, highest_net_streak_record, lowest_net_streak_record, week_average, month_average, year_average, overall_average = get_streak_numbers(False, [])
 
         net_streak = current_date_streak - current_date_antistreak
         streak_text = f"{net_streak}:{lowest_net_streak_record}:{highest_net_streak_record}\ns {current_date_streak}:{longest_streak_record}\nas {current_date_antistreak}:{longest_antistreak_record}\n"
-        self.total_label.setText(f"{streak_text}{today_total}|{last_7_days_total / 7:.1f}|{last_30_days_total / 30:.1f}")
+        self.total_label.setText(f"{streak_text}{today_total}|{last_7_days_total / 7:.1f}|{last_30_days_total / 30:.1f}\n{week_average[-1]:.1f}|{month_average[-1]:.1f}|{year_average[-1]:.1f}|{overall_average[-1]:.1f}")
 
         #write a json file that has net streak, current streak, longest streak, current antistreak, longest antistreak
         streaks_dir = os.path.expanduser(obsidian_dir+'/tail/streaks.txt')
@@ -325,8 +326,7 @@ class IconGrid(QWidget):
         # last_30_days_average rounded to one decimal place
         last_30_days_average = math.floor(last_30_days_average * 10 + 0.5) / 10
         with open(streaks_dir, 'w') as f:
-            json.dump({"net_streak": net_streak, "highest_net_streak_record":highest_net_streak_record,"lowest_net_streak_record":lowest_net_streak_record,"current_streak": current_date_streak, "longest_streak": longest_streak_record, "current_antistreak": current_date_antistreak, "longest_antistreak": longest_antistreak_record,"today_total":today_total,"last_7_days_average":last_7_days_average,"last_30_days_average":last_30_days_average}, f, indent=4, sort_keys=True)
-    
+            json.dump({"net_streak": net_streak, "highest_net_streak_record":highest_net_streak_record,"lowest_net_streak_record":lowest_net_streak_record,"current_streak": current_date_streak, "longest_streak": longest_streak_record, "current_antistreak": current_date_antistreak, "longest_antistreak": longest_antistreak_record,"today_total":today_total,"last_7_days_average":last_7_days_average,"last_30_days_average":last_30_days_average, "week_average":int(week_average[-1]), "month_average":int(month_average[-1]), "year_average":int(year_average[-1]),"overall_average":int(overall_average[-1]) }, f, indent=4, sort_keys=True)
 def get_icon_image_based_on_theme(current_theme):
     if current_theme == "Moe-Dark":
         icon_path = '/home/lunkwill/projects/py_habits_widget/icons/Screenshot_20231124_181238.png'
