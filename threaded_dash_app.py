@@ -6,6 +6,10 @@ import threading
 from datetime import datetime, timedelta
 import pandas as pd
 import plotly.graph_objs as go
+from plotly.graph_objs import Figure
+import json
+
+NOTES_FILEPATH = '/home/lunkwill/projects/py_habits_widget/persistent_plotly_notes.txt'
 
 def get_list_from_dict_and_date(self, ordered_streaks_per_date, date):
     streaks = ordered_streaks_per_date[date]
@@ -40,6 +44,25 @@ def get_list_distance_from_best_streak(self, ordered_streaks_per_date, date):
 
     return dcc.Textarea(value=streak_list_distance_from_best_streak, style={'width': '100%', 'height': 200})
 
+def show_persistent_notes(figure):
+        # Load the notes from the file
+    with open(NOTES_FILEPATH, 'r') as file:
+        notes = json.load(file)
+
+
+    # Add the notes to the graph
+    for date, note_info in notes.items():
+        figure.add_trace(go.Scatter(
+            x=[note_info['coordinates']['x']],
+            y=[3000],  # Placeholder y-coordinate, adjust accordingly
+            text=[note_info['note']],
+            mode='markers',
+            marker=dict(symbol='x'),
+            textposition='top center'
+        ))
+
+    return figure
+
 # Define your Dash Thread
 class DashApp(threading.Thread):
     def __init__(self, fig, ordered_streaks_per_date, ordered_antistreaks_per_date, dates, daily_streaks, daily_antistreaks, records):
@@ -54,6 +77,9 @@ class DashApp(threading.Thread):
         self.fig = fig
 
     def run(self):
+
+        self.fig = show_persistent_notes(self.fig)
+
         # Adjust the height of the graph
         self.fig.update_layout(height=850)  # Adjust the height as needed
 
@@ -147,6 +173,7 @@ class DashApp(threading.Thread):
             Input('reset-button', 'n_clicks')]
         )
         def update_selected_date(clickData, n_clicks):
+            
             ctx = dash.callback_context
             date_streaks = dict(zip(self.dates, self.daily_streaks))
             date_antistreaks = dict(zip(self.dates, self.daily_antistreaks))
@@ -256,14 +283,30 @@ class DashApp(threading.Thread):
                     x = [click_data['points'][0]['x']] # This should be the x-coordinate or date
                     y = [3000]  # Placeholder y-coordinate, adjust accordingly
 
-                    figure['data'].append(go.Scatter(x=x, y=y, text=[note], mode='markers', marker=dict(symbol='x'), textposition='top center'))
+                    figure['data'].append(go.Scatter(x=x, y=y, text=[note], mode='markers', marker=dict(symbol='x'),
+                    
+                    textposition='top center'))
+                    notes = {}
+                    with open(NOTES_FILEPATH, 'r') as file:
+                        notes = json.load(file)
+                    current_datetime = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+                    # Store the note and coordinates in the notes dictionary
+                    notes[current_datetime] = {'note': note, 'coordinates': {'x': x[0]}}
+                    
+                    # Save the updated notes to the file
+                    with open(NOTES_FILEPATH, "w") as file:
+                        json.dump(notes, file)
             elif button_id == 'ai-button' and note:
+                
                 print("2",note)
                 line_index = 0
-                if figure['data'][line_index]['visible'] == 'True':
+                if figure['data'][line_index]['visible'] == True:
                     figure['data'][line_index]['visible'] = 'legendonly'
                 else:
-                    figure['data'][line_index]['visible'] = 'True'
+                    figure['data'][line_index]['visible'] = True
+
+            figure_object = Figure(figure)
+            figure = show_persistent_notes(figure_object)
             return figure
 
 
