@@ -160,9 +160,8 @@ def find_new_habits(habit_dict):
 
     return list_of_new_habits
 
-
-
 def find_longest_streaks_and_antistreaks(start_date, end_date, activities, habitsdb, show_graph, checked_activities):
+    print('checked_activities', checked_activities)
     date_format = '%Y-%m-%d'
     start_date_obj = datetime.strptime(start_date, date_format).date()
     end_date_obj = datetime.strptime(end_date, date_format).date()
@@ -194,7 +193,7 @@ def find_longest_streaks_and_antistreaks(start_date, end_date, activities, habit
 
     currently_streaking_habits = {}
     currently_antistreaking_habits = {}
-    checked_activity_daily_count = []
+    activity_daily_count = []
     checked_activity_streak = []
     unique_habits_count_per_day = []
 
@@ -245,7 +244,7 @@ def find_longest_streaks_and_antistreaks(start_date, end_date, activities, habit
     one_year_ago = end_date_obj - timedelta(days=365)
 
     for i in range(len(activities)):
-        checked_activity_daily_count.append([])
+        activity_daily_count.append([])
         checked_activity_streak.append([])
     current_date = start_date_obj
     while current_date <= end_date_obj:
@@ -254,7 +253,7 @@ def find_longest_streaks_and_antistreaks(start_date, end_date, activities, habit
         for i, activity in enumerate(activities):
             count = habitsdb[activity].get(current_date_str, 0) * 10
             daily_counts.append(count)
-            checked_activity_daily_count[i].append(count)
+            activity_daily_count[i].append(count)
             if count > 0:
                 streak = 1 if not checked_activity_streak[i] else checked_activity_streak[i][-1] + 1
             elif count < 0:
@@ -418,10 +417,10 @@ def find_longest_streaks_and_antistreaks(start_date, end_date, activities, habit
     overall_percentages_all = []
 
     for i in range(len(activities)):
-        week_percentage = calculate_moving_percentage(dates, checked_activity_daily_count[i], 7)    # Last week
-        month_percentage = calculate_moving_percentage(dates, checked_activity_daily_count[i], 30)  # Last month
-        year_percentage = calculate_moving_percentage(dates, checked_activity_daily_count[i], 365)  # Last year
-        overall_percentage = calculate_moving_percentage(dates, checked_activity_daily_count[i], 'overall')  # Overall
+        week_percentage = calculate_moving_percentage(dates, activity_daily_count[i], 7)    # Last week
+        month_percentage = calculate_moving_percentage(dates, activity_daily_count[i], 30)  # Last month
+        year_percentage = calculate_moving_percentage(dates, activity_daily_count[i], 365)  # Last year
+        overall_percentage = calculate_moving_percentage(dates, activity_daily_count[i], 'overall')  # Overall
 
         week_percentages_all.append(week_percentage)
         month_percentages_all.append(month_percentage)
@@ -436,7 +435,7 @@ def find_longest_streaks_and_antistreaks(start_date, end_date, activities, habit
 
     if show_graph:
         # Create graph
-        make_graph(daily_habits_count, list_of_habits, daily_net_streaks, daily_streaks, daily_best_streaks, daily_best_streak_habit_count, daily_antistreaks, daily_worst_anti_streaks, daily_worst_anti_streak_habit_count, daily_total_points, smoothed_total_points_weekly, smoothed_total_points_monthly, dates, activities, checked_activities, currently_streaking_habits, currently_antistreaking_habits, list_of_new_habits, habits_currently_besting, habits_currently_worsting, week_average, month_average, year_average, overall_average, unique_habits_count_per_day, checked_activity_daily_count, checked_activity_streak, week_percentages_all, month_percentages_all, year_percentages_all, overall_percentages_all, records)
+        make_graph(daily_habits_count, list_of_habits, daily_net_streaks, daily_streaks, daily_best_streaks, daily_best_streak_habit_count, daily_antistreaks, daily_worst_anti_streaks, daily_worst_anti_streak_habit_count, daily_total_points, smoothed_total_points_weekly, smoothed_total_points_monthly, dates, activities, checked_activities, currently_streaking_habits, currently_antistreaking_habits, list_of_new_habits, habits_currently_besting, habits_currently_worsting, week_average, month_average, year_average, overall_average, unique_habits_count_per_day, activity_daily_count, checked_activity_streak, week_percentages_all, month_percentages_all, year_percentages_all, overall_percentages_all, records)
 
 
     return (longest_streak_record, longest_antistreak_record, highest_net_streak_record, lowest_net_streak_record, 
@@ -493,7 +492,7 @@ def add_trace_with_hover(fig, x, y, name, line_color, line_dash, hover_text, vis
         secondary_y=sec
     )
 
-def make_graph(daily_habits_count, list_of_habits, daily_net_streaks, daily_streaks, daily_best_streaks, daily_best_streak_habit_count, daily_antistreaks, daily_worst_anti_streaks, daily_worst_anti_streak_habit_count, daily_total_points, smoothed_total_points_weekly, smoothed_total_points_monthly, dates, activities, checked_activities, currently_streaking_habits, currently_antistreaking_habits, list_of_new_habits, habits_currently_besting, habits_currently_worsting, week_average, month_average, year_average, overall_average, unique_habits_per_day, checked_activity_daily_count, checked_activity_streak, week_percentages_all, month_percentages_all, year_percentages_all, overall_percentages_all, records):
+def make_graph(daily_habits_count, list_of_habits, daily_net_streaks, daily_streaks, daily_best_streaks, daily_best_streak_habit_count, daily_antistreaks, daily_worst_anti_streaks, daily_worst_anti_streak_habit_count, daily_total_points, smoothed_total_points_weekly, smoothed_total_points_monthly, dates, activities, checked_activities, currently_streaking_habits, currently_antistreaking_habits, list_of_new_habits, habits_currently_besting, habits_currently_worsting, week_average, month_average, year_average, overall_average, unique_habits_per_day, activity_daily_count, checked_activity_streak, week_percentages_all, month_percentages_all, year_percentages_all, overall_percentages_all, records):
 
     ordered_streaks_per_date = {}
     # Iterate over the dates in currently_streaking_habits
@@ -546,10 +545,10 @@ def make_graph(daily_habits_count, list_of_habits, daily_net_streaks, daily_stre
 
         # #if i < 2:
         # # Calculate moving percentages for different timeframes for each activity
-        week_percentage = calculate_moving_percentage(dates, checked_activity_daily_count[i], 7)    # Last week
-        month_percentage = calculate_moving_percentage(dates, checked_activity_daily_count[i], 30)  # Last month
-        year_percentage = calculate_moving_percentage(dates, checked_activity_daily_count[i], 365)  # Last year
-        overall_percentage = calculate_moving_percentage(dates, checked_activity_daily_count[i], 'overall')  # Overall
+        week_percentage = calculate_moving_percentage(dates, activity_daily_count[i], 7)    # Last week
+        month_percentage = calculate_moving_percentage(dates, activity_daily_count[i], 30)  # Last month
+        year_percentage = calculate_moving_percentage(dates, activity_daily_count[i], 365)  # Last year
+        overall_percentage = calculate_moving_percentage(dates, activity_daily_count[i], 'overall')  # Overall
 
         week_percentages_all.append(week_percentage)
         month_percentages_all.append(month_percentage)
@@ -557,14 +556,30 @@ def make_graph(daily_habits_count, list_of_habits, daily_net_streaks, daily_stre
         overall_percentages_all.append(overall_percentage)
 
         # Plotting
-        fig.add_trace(go.Scatter(x=dates, y=checked_activity_daily_count[i], name=activities[i], line=dict(color=color), visible=chart_visible), secondary_y=True)
-        fig.add_trace(go.Scatter(x=dates, y=checked_activity_streak[i], name=activities[i]+' streak', line=dict(color=color, dash='dash'), visible=chart_visible), secondary_y=False)
+        fig.add_trace(go.Scatter(x=dates, y=activity_daily_count[i], name=activities[i], line=dict(color=color), visible=chart_visible), secondary_y=True)
+        fig.add_trace(go.Scatter(x=dates, y=checked_activity_streak[i], name=activities[i]+' streak', line=dict(color=color, dash='dot'), visible=chart_visible), secondary_y=False)
 
     #if i < 2:
-        fig.add_trace(go.Scatter(x=dates, y=week_percentage, name=activities[i] + ' % week', line=dict(color=color, dash='dot'), visible=chart_visible), secondary_y=True)
-        fig.add_trace(go.Scatter(x=dates, y=month_percentage, name=activities[i] + ' % month', line=dict(color=color, dash='dot'), visible=chart_visible), secondary_y=True)
-        fig.add_trace(go.Scatter(x=dates, y=year_percentage, name=activities[i] + ' % year', line=dict(color=color, dash='dot'), visible=chart_visible), secondary_y=True)
-        fig.add_trace(go.Scatter(x=dates, y=overall_percentage, name=activities[i] + ' % overall', line=dict(color=color, dash='dot'), visible=chart_visible), secondary_y=True)
+        fig.add_trace(go.Scatter(x=dates, y=week_percentage, name=activities[i] + ' % week', line=dict(color=color, dash='dash'), visible=chart_visible), secondary_y=True)
+        fig.add_trace(go.Scatter(x=dates, y=month_percentage, name=activities[i] + ' % month', line=dict(color=color, dash='dashdot'), visible=chart_visible), secondary_y=True)
+        fig.add_trace(go.Scatter(x=dates, y=year_percentage, name=activities[i] + ' % year', line=dict(color=color, dash='longdash'), visible=chart_visible), secondary_y=True)
+        fig.add_trace(go.Scatter(x=dates, y=overall_percentage, name=activities[i] + ' % overall', line=dict(color=color, dash='longdashdot'), visible=chart_visible), secondary_y=True)
+
+
+        # Assuming activity_daily_count is a list of numbers
+        activity_daily_series = pd.Series(activity_daily_count[i])
+
+        # Now you can apply the rolling method
+        smoothed_activity_points_weekly = activity_daily_series.rolling(window=7).mean().tolist()
+        smoothed_activity_points_monthly = activity_daily_series.rolling(window=30).mean().tolist()
+        smoothed_activity_points_yearly = activity_daily_series.rolling(window=365).mean().tolist()
+
+        # Your plotting code can remain the same, now that the lists are properly calculated
+        fig.add_trace(go.Scatter(x=dates, y=smoothed_activity_points_weekly, name=activities[i] + ' Weekly Smoothed', line=dict(color=color, dash='longdashdot'), visible=chart_visible), secondary_y=True)
+        fig.add_trace(go.Scatter(x=dates, y=smoothed_activity_points_monthly, name=activities[i] + ' Monthly Smoothed', line=dict(color=color, dash='dot'), visible=chart_visible), secondary_y=True)
+        fig.add_trace(go.Scatter(x=dates, y=smoothed_activity_points_yearly, name=activities[i] + ' Yearly Smoothed', line=dict(color=color, dash='solid'), visible=chart_visible), secondary_y=True)
+
+
 
     # Add traces for the averages
     fig.add_trace(go.Scatter(x=dates, y=unique_habits_per_day, name='Unique habits per day', line=dict(color='black'), visible=chart_visible), secondary_y=True)

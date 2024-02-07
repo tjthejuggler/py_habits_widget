@@ -44,7 +44,7 @@ with open ("/home/lunkwill/projects/py_habits_widget/stats_key.txt", "r") as myf
 prompt = prompt.format(query="toggle every Juggling stat", stats_key=STATS_KEY)
 print("prompt")
 data = {
-    "model": "nexusraven",
+    "model": "mixtral",
     "prompt": prompt,
     "stream": False,
     "options": {"num_predict": 100}
