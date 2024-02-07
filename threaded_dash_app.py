@@ -1,18 +1,16 @@
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
-from dash.dependencies import Input, Output
+from dash.dependencies import Input, Output, State
 import threading
-
 from datetime import datetime, timedelta
 import pandas as pd
-
+import plotly.graph_objs as go
 
 def get_list_from_dict_and_date(self, ordered_streaks_per_date, date):
     streaks = ordered_streaks_per_date[date]
     streak_list_longest_ordered = '\n'.join(streaks)
     streak_list_longest_ordered = dcc.Textarea(value=streak_list_longest_ordered, style={'width': '100%', 'height': 200})
-
     return streak_list_longest_ordered
 
 def get_list_distance_from_best_streak(self, ordered_streaks_per_date, date):
@@ -44,8 +42,6 @@ def get_list_distance_from_best_streak(self, ordered_streaks_per_date, date):
 
 # Define your Dash Thread
 class DashApp(threading.Thread):
-
-
     def __init__(self, fig, ordered_streaks_per_date, ordered_antistreaks_per_date, dates, daily_streaks, daily_antistreaks, records):
         threading.Thread.__init__(self)
         self.daemon = True
@@ -111,6 +107,16 @@ class DashApp(threading.Thread):
             ),
             html.Div(id='selected-date'),
             dcc.Graph(id='your-graph', figure=self.fig),
+
+            #html.Div(id='click-data'),  # Div to display the annotation
+            
+            # Add a textarea for note input and a button for submitting notes
+            html.Div([
+                dcc.Textarea(id='note-input', placeholder='Enter a note here...', style={'width': '100%', 'height': 100}),
+                html.Button('Submit Note', id='submit-note', n_clicks=0),
+                html.Button('AI', id='ai-button', n_clicks=0),
+            ]),
+
             html.Div(id='click-data'),  # Div to display the annotation
 
             html.Div([
@@ -142,11 +148,8 @@ class DashApp(threading.Thread):
         )
         def update_selected_date(clickData, n_clicks):
             ctx = dash.callback_context
-            # streak_difference_between_selected_and_previous = self.daily_streaks[clickData['points'][0]['x']] - self.daily_streaks[clickData['points'][0]['x'] - timedelta(days=1)]
             date_streaks = dict(zip(self.dates, self.daily_streaks))
             date_antistreaks = dict(zip(self.dates, self.daily_antistreaks))
-            # print(date_streaks)
-            # print(self.daily_streaks)
             date_selected = False
 
             if not ctx.triggered:
@@ -157,10 +160,6 @@ class DashApp(threading.Thread):
             if button_id == 'reset-button':
                 date_selected = datetime.today().date().strftime("%Y-%m-%d")
                 date_selected = datetime.strptime(date_selected, '%Y-%m-%d')
-                #return f'Selected date: {datetime.today().date().strftime("%Y-%m-%d")}'
-
-
-            # 1/23/24 THIS NEEDS CHECKED AND IF IT WORKS THEN OTHER STUFF LIKE IT NEEDS HOOKED UP
 
             elif button_id == 'your-graph' and clickData is not None:
                 date_selected = datetime.strptime(clickData['points'][0]['x'], '%Y-%m-%d')
@@ -216,7 +215,8 @@ class DashApp(threading.Thread):
             new_text2 = get_list_distance_from_best_streak(self, self.ordered_antistreaks_per_date, point_date)
             new_text3 = get_list_from_dict_and_date(self, self.ordered_streaks_per_date, point_date)
             new_text4 = get_list_from_dict_and_date(self, self.ordered_antistreaks_per_date, point_date)
-            return f"{point_date}", new_text1, new_text2, new_text3, new_text4
+            #return f"{point_date}", new_text1, new_text2, new_text3, new_text4
+            return clickData, new_text1, new_text2, new_text3, new_text4
         
 
         @app.callback(
@@ -228,7 +228,43 @@ class DashApp(threading.Thread):
                 return {'display': 'none'}
             else:  # If odd, show the div
                 return {'box-shadow': '0 4px 8px 0 rgba(0,0,0,0.2)', 'transition': '0.3s', 'padding': '20px', 'border-radius': '5px'}
+            
+        @app.callback(
+            Output('your-graph', 'figure'),
+            [Input('submit-note', 'n_clicks'), Input('ai-button', 'n_clicks')],
+            [State('click-data', 'children'),            
+            State('note-input', 'value'),
+            State('your-graph', 'figure')]
+        )
+        def button_clicked(n_clicks_add_note, n_clicks_ai, click_data, note, figure):
+            print("clicked")
+            ctx = dash.callback_context
+            if not ctx.triggered:
+                button_id = 'No clicks yet'
+            else:
+                button_id = ctx.triggered[0]['prop_id'].split('.')[0]
+            if button_id == 'submit-note' and n_clicks_add_note > 0 and note:
+                if click_data and "Click on a point in the graph" not in click_data:
+                    # Here you would convert click_data to the point's coordinates or use an identifier
+                    # This is a simplified example, adjust according to your data structure
+                    
+                    #click_data:  {'points': [{'curveNumber': 0, 'pointNumber': 278, 'pointIndex': 278, 'x': '2023-06-08', 'y': 37, 'text': '2023-06-08<br>Value: 37<br>Flossed', 'bbox': {'x0': 856.94, 'x1': 858.94, 'y0': 440.75, 'y1': 442.75}}]}
 
-        # Run the Dash app
-        #display_click_data(None, 0)
+                    print("click_data: ", click_data)
+                    # Example: Add an X marker for the note at the selected date's point
+                    # This is a placeholder, replace with your logic to determine the x, y coordinates
+                    x = [click_data['points'][0]['x']] # This should be the x-coordinate or date
+                    y = [3000]  # Placeholder y-coordinate, adjust accordingly
+
+                    figure['data'].append(go.Scatter(x=x, y=y, text=[note], mode='markers', marker=dict(symbol='x'), textposition='top center'))
+            elif button_id == 'ai-button' and note:
+                print("2",note)
+                line_index = 0
+                if figure['data'][line_index]['visible'] == 'True':
+                    figure['data'][line_index]['visible'] = 'legendonly'
+                else:
+                    figure['data'][line_index]['visible'] = 'True'
+            return figure
+
+
         app.run_server(debug=False)  # Set debug to False

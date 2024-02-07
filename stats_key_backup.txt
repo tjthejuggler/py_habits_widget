@@ -1,0 +1,329 @@
+Stats Key:
+0. Habits count
+1. Net streaks
+2. Streaks
+3. Best streaks
+4. Best streak habits count
+5. Anti-streaks
+6. Worst anti-streaks
+7. Worst anti-streak habits count
+8. Daily Total Points
+9. Weekly Smoothed Total Points
+10. Monthly Smoothed Total Points
+11. AI tool
+12. AI tool streak
+13. AI tool % week
+14. AI tool % month
+15. AI tool % year
+16. AI tool % overall
+17. Anki created
+18. Anki created streak
+19. Anki created % week
+20. Anki created % month
+21. Anki created % year
+22. Anki created % overall
+23. Anki mydis done
+24. Anki mydis done streak
+25. Anki mydis done % week
+26. Anki mydis done % month
+27. Anki mydis done % year
+28. Anki mydis done % overall
+29. Apnea apb
+30. Apnea apb streak
+31. Apnea apb % week
+32. Apnea apb % month
+33. Apnea apb % year
+34. Apnea apb % overall
+35. Apnea practiced
+36. Apnea practiced streak
+37. Apnea practiced % week
+38. Apnea practiced % month
+39. Apnea practiced % year
+40. Apnea practiced % overall
+41. Apnea spb
+42. Apnea spb streak
+43. Apnea spb % week
+44. Apnea spb % month
+45. Apnea spb % year
+46. Apnea spb % overall
+47. Apnea walked
+48. Apnea walked streak
+49. Apnea walked % week
+50. Apnea walked % month
+51. Apnea walked % year
+52. Apnea walked % overall
+53. Article read
+54. Article read streak
+55. Article read % week
+56. Article read % month
+57. Article read % year
+58. Article read % overall
+59. Book read
+60. Book read streak
+61. Book read % week
+62. Book read % month
+63. Book read % year
+64. Book read % overall
+65. Broke record
+66. Broke record streak
+67. Broke record % week
+68. Broke record % month
+69. Broke record % year
+70. Broke record % overall
+71. Cardio sessions
+72. Cardio sessions streak
+73. Cardio sessions % week
+74. Cardio sessions % month
+75. Cardio sessions % year
+76. Cardio sessions % overall
+77. Cold Shower Widget
+78. Cold Shower Widget streak
+79. Cold Shower Widget % week
+80. Cold Shower Widget % month
+81. Cold Shower Widget % year
+82. Cold Shower Widget % overall
+83. Create juggle
+84. Create juggle streak
+85. Create juggle % week
+86. Create juggle % month
+87. Create juggle % year
+88. Create juggle % overall
+89. Dream acted
+90. Dream acted streak
+91. Dream acted % week
+92. Dream acted % month
+93. Dream acted % year
+94. Dream acted % overall
+95. Drew
+96. Drew streak
+97. Drew % week
+98. Drew % month
+99. Drew % year
+100. Drew % overall
+101. Drm Review
+102. Drm Review streak
+103. Drm Review % week
+104. Drm Review % month
+105. Drm Review % year
+106. Drm Review % overall
+107. Early phone
+108. Early phone streak
+109. Early phone % week
+110. Early phone % month
+111. Early phone % year
+112. Early phone % overall
+113. Educational video watched
+114. Educational video watched streak
+115. Educational video watched % week
+116. Educational video watched % month
+117. Educational video watched % year
+118. Educational video watched % overall
+119. Filmed juggle
+120. Filmed juggle streak
+121. Filmed juggle % week
+122. Filmed juggle % month
+123. Filmed juggle % year
+124. Filmed juggle % overall
+125. Flossed
+126. Flossed streak
+127. Flossed % week
+128. Flossed % month
+129. Flossed % year
+130. Flossed % overall
+131. Fun juggle
+132. Fun juggle streak
+133. Fun juggle % week
+134. Fun juggle % month
+135. Fun juggle % year
+136. Fun juggle % overall
+137. Good posture
+138. Good posture streak
+139. Good posture % week
+140. Good posture % month
+141. Good posture % year
+142. Good posture % overall
+143. Grumpy blocker
+144. Grumpy blocker streak
+145. Grumpy blocker % week
+146. Grumpy blocker % month
+147. Grumpy blocker % year
+148. Grumpy blocker % overall
+149. HIT
+150. HIT streak
+151. HIT % week
+152. HIT % month
+153. HIT % year
+154. HIT % overall
+155. Health learned
+156. Health learned streak
+157. Health learned % week
+158. Health learned % month
+159. Health learned % year
+160. Health learned % overall
+161. Inspired juggle
+162. Inspired juggle streak
+163. Inspired juggle % week
+164. Inspired juggle % month
+165. Inspired juggle % year
+166. Inspired juggle % overall
+167. Janki used
+168. Janki used streak
+169. Janki used % week
+170. Janki used % month
+171. Janki used % year
+172. Janki used % overall
+173. Juggle goal
+174. Juggle goal streak
+175. Juggle goal % week
+176. Juggle goal % month
+177. Juggle goal % year
+178. Juggle goal % overall
+179. Juggling record broke
+180. Juggling record broke streak
+181. Juggling record broke % week
+182. Juggling record broke % month
+183. Juggling record broke % year
+184. Juggling record broke % overall
+185. Juggling tech sessions
+186. Juggling tech sessions streak
+187. Juggling tech sessions % week
+188. Juggling tech sessions % month
+189. Juggling tech sessions % year
+190. Juggling tech sessions % overall
+191. Kind stranger
+192. Kind stranger streak
+193. Kind stranger % week
+194. Kind stranger % month
+195. Kind stranger % year
+196. Kind stranger % overall
+197. Language studied
+198. Language studied streak
+199. Language studied % week
+200. Language studied % month
+201. Language studied % year
+202. Language studied % overall
+203. Launch Pushups Widget
+204. Launch Pushups Widget streak
+205. Launch Pushups Widget % week
+206. Launch Pushups Widget % month
+207. Launch Pushups Widget % year
+208. Launch Pushups Widget % overall
+209. Launch Situps Widget
+210. Launch Situps Widget streak
+211. Launch Situps Widget % week
+212. Launch Situps Widget % month
+213. Launch Situps Widget % year
+214. Launch Situps Widget % overall
+215. Launch Squats Widget
+216. Launch Squats Widget streak
+217. Launch Squats Widget % week
+218. Launch Squats Widget % month
+219. Launch Squats Widget % year
+220. Launch Squats Widget % overall
+221. Lucidity trained
+222. Lucidity trained streak
+223. Lucidity trained % week
+224. Lucidity trained % month
+225. Lucidity trained % year
+226. Lucidity trained % overall
+227. Lung stretch
+228. Lung stretch streak
+229. Lung stretch % week
+230. Lung stretch % month
+231. Lung stretch % year
+232. Lung stretch % overall
+233. Meditations
+234. Meditations streak
+235. Meditations % week
+236. Meditations % month
+237. Meditations % year
+238. Meditations % overall
+239. Memory practice
+240. Memory practice streak
+241. Memory practice % week
+242. Memory practice % month
+243. Memory practice % year
+244. Memory practice % overall
+245. Music listen
+246. Music listen streak
+247. Music listen % week
+248. Music listen % month
+249. Music listen % year
+250. Music listen % overall
+251. Podcast finished
+252. Podcast finished streak
+253. Podcast finished % week
+254. Podcast finished % month
+255. Podcast finished % year
+256. Podcast finished % overall
+257. Programming sessions
+258. Programming sessions streak
+259. Programming sessions % week
+260. Programming sessions % month
+261. Programming sessions % year
+262. Programming sessions % overall
+263. Question asked
+264. Question asked streak
+265. Question asked % week
+266. Question asked % month
+267. Question asked % year
+268. Question asked % overall
+269. Read academic
+270. Read academic streak
+271. Read academic % week
+272. Read academic % month
+273. Read academic % year
+274. Read academic % overall
+275. Sleep watch
+276. Sleep watch streak
+277. Sleep watch % week
+278. Sleep watch % month
+279. Sleep watch % year
+280. Sleep watch % overall
+281. Song juggle
+282. Song juggle streak
+283. Song juggle % week
+284. Song juggle % month
+285. Song juggle % year
+286. Song juggle % overall
+287. Todos done
+288. Todos done streak
+289. Todos done % week
+290. Todos done % month
+291. Todos done % year
+292. Todos done % overall
+293. Took pills
+294. Took pills streak
+295. Took pills % week
+296. Took pills % month
+297. Took pills % year
+298. Took pills % overall
+299. UC post
+300. UC post streak
+301. UC post % week
+302. UC post % month
+303. UC post % year
+304. UC post % overall
+305. Unique juggle
+306. Unique juggle streak
+307. Unique juggle % week
+308. Unique juggle % month
+309. Unique juggle % year
+310. Unique juggle % overall
+311. Unusual experience
+312. Unusual experience streak
+313. Unusual experience % week
+314. Unusual experience % month
+315. Unusual experience % year
+316. Unusual experience % overall
+317. Writing sessions
+318. Writing sessions streak
+319. Writing sessions % week
+320. Writing sessions % month
+321. Writing sessions % year
+322. Writing sessions % overall
+323. Unique habits per day
+324. Average % week
+325. Average % month
+326. Average % year
+327. Average % overall

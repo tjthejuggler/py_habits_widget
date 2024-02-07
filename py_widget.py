@@ -93,7 +93,7 @@ class IconGrid(QWidget):
                 last_value_from_habitsdb = list(inner_dict.values())[-1]
                 value_from_habitsdb_to_add = habitsdb_to_add[activities[i]]
                 last_value = last_value_from_habitsdb + value_from_habitsdb_to_add
-                print(activities[i], last_value)
+                #print(activities[i], last_value)
                 if "Pushups" in activities[i]:
                     last_value = math.floor(last_value/30 + 0.5)
                 elif "Situps" in activities[i]:
@@ -265,7 +265,7 @@ class IconGrid(QWidget):
         button_index = 0
         for index, item in enumerate(icons_and_scripts):
             if item is not None:
-                print("item", item)
+                #print("item", item)
                 icon, _, _, left_number, right_number = item
                 self.button_with_checkboxes[button_index].button.setIcon(QIcon(icon))
                 button_index += 1

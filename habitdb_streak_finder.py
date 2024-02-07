@@ -277,7 +277,7 @@ def find_longest_streaks_and_antistreaks(start_date, end_date, activities, habit
         daily_habits_count.append(habits_count)
         # List of habits for the day
         list_of_habits[current_date_str] = [habit for habit, inner_dict in habitsdb.items() if str(current_date) in inner_dict]
-        print(f'list of habits {current_date_str}', list_of_habits[current_date_str])
+        #print(f'list of habits {current_date_str}', list_of_habits[current_date_str])
         # Initialize streak and antistreak dictionaries
         current_all_time_best_streaks = current_all_time_worst_antistreaks = {activity: 0 for activity in activities}
         habits_currently_all_time_besting = habits_currently_all_time_worsting = 0
@@ -305,7 +305,7 @@ def find_longest_streaks_and_antistreaks(start_date, end_date, activities, habit
                 current_all_time_worst_antistreaks[activity] = days_since_not_zero #new for worst ever
                 habits_currently_all_time_worsting += 1 #new for worst ever
                 habits_currently_worsting[current_date.strftime('%Y-%m-%d')].append(activity +': '+str(days_since_not_zero)) #new for worst ever
-                print('worst antistreak', activity, days_since_not_zero, current_date_str)
+                #print('worst antistreak', activity, days_since_not_zero, current_date_str)
             if days_since_not_zero > 0:
                 currently_antistreaking_habits[current_date.strftime('%Y-%m-%d')].append(activity +': '+str(days_since_not_zero)+'('+str(highest_days_since_not_zero_so_far[activity])+')')
             if days_since_zero > 0:
@@ -542,7 +542,7 @@ def make_graph(daily_habits_count, list_of_habits, daily_net_streaks, daily_stre
         chart_visible = 'legendonly'
         if activities[i] in checked_activities:
             chart_visible = True
-        print('activities[i]', activities[i])
+        #print('activities[i]', activities[i])
 
         # #if i < 2:
         # # Calculate moving percentages for different timeframes for each activity
@@ -612,6 +612,17 @@ def make_graph(daily_habits_count, list_of_habits, daily_net_streaks, daily_stre
     # Update layout and show plot
     fig.update_layout(title_text="Streaks, Habits Count, and Total Points Over Time")
     #fig.show()
+
+    legend_text = [trace.name for trace in fig.data]
+    stats = ""
+    for text in legend_text:
+        stats += text + '\n'
+
+    stats = stats.split('\n')
+    stats = ['['+str(i) + '] ' + stats[i] + ' (off)' for i in range(len(stats))]
+    stats = '\n'.join(stats)
+    print(stats)
+
 
     highest_date = max(currently_streaking_habits.keys(), key=lambda date: datetime.strptime(date, '%Y-%m-%d'))
     ordered_antistreaks = sorted(currently_antistreaking_habits[highest_date], key=get_streak_number, reverse=True)
