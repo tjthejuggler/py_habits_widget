@@ -23,6 +23,8 @@ import plotly.graph_objects as go
 import threaded_dash_app
 import webbrowser
 
+import drmz_extract
+
 def make_json(directory):
     directory = os.path.expanduser(directory)
     with open(directory, 'r') as f:
@@ -465,14 +467,51 @@ def calculate_moving_percentage(dates, daily_counts, timeframe):
     return percentages
 
 # Create custom hover text including date, value, and words from hover_dict
-def create_hover_text(date_series, value_series, hover_dict):
+# def create_hover_text(date_series, value_series, hover_dict):
+#     hover_texts = []
+#     for date, value in zip(date_series, value_series):
+#         date_str = date.strftime('%Y-%m-%d')
+#         words = '<br>'.join(hover_dict.get(date_str, []))  # Join words with line breaks
+#         hover_text = f'{date_str}<br>Value: {value}<br>{words}'
+#         hover_texts.append(hover_text)
+#     return hover_texts
+
+def create_hover_text(date_series, value_series, hover_dict, max_line_length=50):
+    def wrap_text(text, width):
+        """
+        Wraps text for a single hover entry to ensure that lines do not exceed
+        the specified width.
+        """
+        words = text.split(' ')
+        wrapped_lines = []
+        current_line = ''
+        
+        for word in words:
+            # Check if adding the next word would exceed the line width
+            if len(current_line) + len(word) + 1 > width:
+                wrapped_lines.append(current_line)
+                current_line = word
+            else:
+                if current_line:  # Not the first word in a line
+                    current_line += ' '
+                current_line += word
+        # Add the last line if it's not empty
+        if current_line:
+            wrapped_lines.append(current_line)
+        
+        return '<br>'.join(wrapped_lines)
+    
     hover_texts = []
     for date, value in zip(date_series, value_series):
         date_str = date.strftime('%Y-%m-%d')
-        words = '<br>'.join(hover_dict.get(date_str, []))  # Join words with line breaks
+        raw_words = hover_dict.get(date_str, [])
+        wrapped_words = [wrap_text(word, max_line_length) for word in raw_words]
+        words = '<br>'.join(wrapped_words)  # Join words with line breaks, after wrapping
         hover_text = f'{date_str}<br>Value: {value}<br>{words}'
         hover_texts.append(hover_text)
+    
     return hover_texts
+
 
 # Initialize a dictionary to store the ordered list of streaks for each date
 def get_streak_number(streak):
@@ -491,6 +530,55 @@ def add_trace_with_hover(fig, x, y, name, line_color, line_dash, hover_text, vis
         ), 
         secondary_y=sec
     )
+
+def format_extra_data_dict(unusual_experience_dict):
+    '''
+    Takes dicts in this format:
+    "2023-03-19 10:00:17": "landauer limit - new anki card",
+    "2023-03-19 12:00:18": "burping - new anki card",
+    and outputs in this format:
+    "2023-03-19": ["10:00:17 landauer limit - new anki card", "12:00:18 burping - new anki card"]
+    '''
+    new_dict = {}
+    for key, value in unusual_experience_dict.items():
+        date_str, time_str = key.split(' ')
+        formatted_value = f"{time_str} {value}"
+        if date_str in new_dict:
+            new_dict[date_str].append(formatted_value)
+        else:
+            new_dict[date_str] = [formatted_value]
+    
+    return new_dict
+
+def create_json_from_drmz_txt():
+    with open('/home/lunkwill/Documents/obsidyen/drmz.md', 'r') as f:
+        drmz = f.read()
+    # Initialize variables to hold the current date and story
+    current_date = None
+    current_story = ""
+    stories_dict = {}
+
+    # Iterate over the lines in the file
+    for line in drmz:
+        # If the line is a date, save it as the current date
+        if line.strip().count('-') == 2:
+            # If there's a current date and story, add them to the dictionary
+            if current_date:
+                stories_dict[current_date] = [current_story.strip()]
+            current_date = line.strip()
+            current_story = ""
+        # If the line is part of a story, add it to the current story
+        elif line.strip() != "":
+            current_story += line.strip() + " "
+
+    # Add the last story to the dictionary
+    if current_date:
+        stories_dict[current_date] = [current_story.strip()]
+
+    # Write the dictionary to a JSON file
+    with open('stories.json', 'w') as f:
+        json.dump(stories_dict, f, indent=4)
+
 
 def make_graph(daily_habits_count, list_of_habits, daily_net_streaks, daily_streaks, daily_best_streaks, daily_best_streak_habit_count, daily_antistreaks, daily_worst_anti_streaks, daily_worst_anti_streak_habit_count, daily_total_points, smoothed_total_points_weekly, smoothed_total_points_monthly, dates, activities, checked_activities, currently_streaking_habits, currently_antistreaking_habits, list_of_new_habits, habits_currently_besting, habits_currently_worsting, week_average, month_average, year_average, overall_average, unique_habits_per_day, activity_daily_count, checked_activity_streak, week_percentages_all, month_percentages_all, year_percentages_all, overall_percentages_all, records):
 
@@ -530,17 +618,58 @@ def make_graph(daily_habits_count, list_of_habits, daily_net_streaks, daily_stre
     add_trace_with_hover(fig, dates, daily_worst_anti_streak_habit_count, 'Worst anti-streak habits count', 'yellow', 'dot', custom_hover_text_worst_anti_streak_habit_count, chart_visible, True)
 
     # Add traces for total points and smoothed total points
-    fig.add_trace(go.Scatter(x=dates, y=daily_total_points, name='Daily Total Points', line=dict(color='white'), visible=chart_visible), secondary_y=True)
+    fig.add_trace(go.Scatter(x=dates, y=daily_total_points, name='Daily Total Points', line=dict(color='grey'), visible=chart_visible), secondary_y=True)
     fig.add_trace(go.Scatter(x=dates, y=smoothed_total_points_weekly, name='Weekly Smoothed Total Points', line=dict(color='black'), visible=chart_visible), secondary_y=True)
-    fig.add_trace(go.Scatter(x=dates, y=smoothed_total_points_monthly, name='Monthly Smoothed Total Points', line=dict(color='gray'), visible=chart_visible), secondary_y=True)
+    fig.add_trace(go.Scatter(x=dates, y=smoothed_total_points_monthly, name='Monthly Smoothed Total Points', line=dict(color='purple'), visible=chart_visible), secondary_y=True)
 
     color_list = ["red", "orange", "green", "blue", "pink", "yellow", "white", "purple", "gray", "black"]
 
+
+
+    # Your existing code
+    drmz_json = {}
+    drmz_json = drmz_extract.create_json_from_drmz_txt()
+    daily_drmz_count = []
+    daily_drmz_char_count = []
+    for date in dates:
+        date_str = date.strftime('%Y-%m-%d')
+        if date_str in drmz_json:
+            daily_drmz_count.append(len(drmz_json[date_str]))
+            daily_drmz_char_count.append(sum(len(story) for story in drmz_json[date_str]))
+        else:
+            daily_drmz_count.append(0)
+            daily_drmz_char_count.append(0)
+
+    # Convert the lists to pandas Series
+    daily_drmz_count_series = pd.Series(daily_drmz_count)
+    daily_drmz_char_count_series = pd.Series(daily_drmz_char_count)
+
+    # Calculate the rolling average
+    smoothed_drmz_count_weekly = daily_drmz_count_series.rolling(window=7).mean().tolist()
+    smoothed_drmz_count_monthly = daily_drmz_count_series.rolling(window=30).mean().tolist()
+
+    smoothed_drmz_char_count_weekly = daily_drmz_char_count_series.rolling(window=7).mean().tolist()
+    smoothed_drmz_char_count_monthly = daily_drmz_char_count_series.rolling(window=30).mean().tolist()
+
+    custom_hover_text_for_drmz = create_hover_text(dates, daily_drmz_count, drmz_json)    
+    add_trace_with_hover(fig, dates, daily_drmz_count, 'Drmz', 'black', 'solid', custom_hover_text_for_drmz, chart_visible, False)
+    fig.add_trace(go.Scatter(x=dates, y=smoothed_drmz_count_weekly, name='Weekly Smoothed Drmz', line=dict(color='black', dash='dash'), visible=chart_visible), secondary_y=False)
+    fig.add_trace(go.Scatter(x=dates, y=smoothed_drmz_count_monthly, name='Monthly Smoothed Drmz', line=dict(color='black', dash='dot'), visible=chart_visible), secondary_y=False)
+
+    custom_hover_text_for_drmz_char_count = create_hover_text(dates, daily_drmz_char_count, drmz_json)
+    add_trace_with_hover(fig, dates, daily_drmz_char_count, 'Drmz char count', 'purple', 'solid', custom_hover_text_for_drmz_char_count, chart_visible, True)
+    fig.add_trace(go.Scatter(x=dates, y=smoothed_drmz_char_count_weekly, name='Weekly Smoothed Drmz char count', line=dict(color='purple', dash='dash'), visible=chart_visible), secondary_y=True)
+    fig.add_trace(go.Scatter(x=dates, y=smoothed_drmz_char_count_monthly, name='Monthly Smoothed Drmz char count', line=dict(color='purple', dash='dot'), visible=chart_visible), secondary_y=True)
+
     for i in range(len(activities)):
         color = color_list[i % 10]
-        chart_visible = 'legendonly'
+        chart_visible_noted = True
+        chart_visible_unnoted = 'legendonly'
+        if len(checked_activities) > 0:
+            chart_visible = 'legendonly'
         if activities[i] in checked_activities:
             chart_visible = True
+            chart_visible_unnoted = True
         #print('activities[i]', activities[i])
 
         # #if i < 2:
@@ -555,15 +684,56 @@ def make_graph(daily_habits_count, list_of_habits, daily_net_streaks, daily_stre
         year_percentages_all.append(year_percentage)
         overall_percentages_all.append(overall_percentage)
 
-        # Plotting
-        fig.add_trace(go.Scatter(x=dates, y=activity_daily_count[i], name=activities[i], line=dict(color=color), visible=chart_visible), secondary_y=True)
-        fig.add_trace(go.Scatter(x=dates, y=checked_activity_streak[i], name=activities[i]+' streak', line=dict(color=color, dash='dot'), visible=chart_visible), secondary_y=False)
+        #IF ACTIVITIES[I] IS UNUSUAL EVENTS THEN I SHOULD OPEN THE UE FILE AND PPLUG IN THE DATA FROM IT. I THINK PODCASTS, ARTICLES, OTHER STUFF WOULD BE GREAT AS WELL!
+        if activities[i].lower() == "unusual experience":
+            with open('/home/lunkwill/Documents/obsidyen/tail/unusual_experiences.txt') as f:
+                unusual_experience_dict = json.load(f)
+            formatted_unusual_experience_dict = format_extra_data_dict(unusual_experience_dict)
+            custom_hover_text_unusual_experience = create_hover_text(dates, activity_daily_count[i], formatted_unusual_experience_dict)
+            add_trace_with_hover(fig, dates, activity_daily_count[i], 'Unusual Experience', 'red', 'solid', custom_hover_text_unusual_experience, chart_visible_noted, True)
+        elif activities[i].lower() == "book read":
+            with open('/home/lunkwill/Documents/obsidyen/tail/book_read_history.txt') as f:
+                books_read_dict = json.load(f)
+            formatted_books_read_dict = format_extra_data_dict(books_read_dict)
+            custom_hover_text_books_read = create_hover_text(dates, activity_daily_count[i], formatted_books_read_dict)
+            add_trace_with_hover(fig, dates, activity_daily_count[i], 'Books Read', 'grey', 'solid', custom_hover_text_books_read, chart_visible_noted, True)
+        elif activities[i].lower() == "article read":
+            with open('/home/lunkwill/Documents/obsidyen/tail/article_read_db.txt') as f:
+                articles_read_dict = json.load(f)
+            print('articles_read_dict', articles_read_dict)
+            formatted_articles_read_dict = format_extra_data_dict(articles_read_dict)
+            custom_hover_text_articles_read = create_hover_text(dates, activity_daily_count[i], formatted_articles_read_dict)
+            add_trace_with_hover(fig, dates, activity_daily_count[i], 'Articles Read', 'purple', 'solid', custom_hover_text_articles_read, chart_visible_noted, True)
+        elif activities[i].lower() == "podcast finished":
+            with open('/home/lunkwill/Documents/obsidyen/tail/podcasts_history_2023_03_25_to_10_28.txt') as f:
+                podcasts_finished_dict1 = json.load(f)
+            with open('/home/lunkwill/Documents/obsidyen/tail/podcasts_history.txt') as f:
+                podcasts_finished_dict2 = json.load(f)
+            podcasts_finished_dict = {**podcasts_finished_dict1, **podcasts_finished_dict2}
+            formatted_podcasts_finished_dict = format_extra_data_dict(podcasts_finished_dict)
+            custom_hover_text_podcasts_finished = create_hover_text(dates, activity_daily_count[i], formatted_podcasts_finished_dict)
+            add_trace_with_hover(fig, dates, activity_daily_count[i], 'Podcasts Finished', 'red', 'solid', custom_hover_text_podcasts_finished, chart_visible_noted, True)
+        elif activities[i].lower() == "todos done":
+            with open('/home/lunkwill/Documents/obsidyen/tail/tododb.txt') as f:
+                todo_completed_dict = json.load(f)
+            formatted_todo_completed_dict = format_extra_data_dict(todo_completed_dict)
+            custom_hover_text_todo_completed = create_hover_text(dates, activity_daily_count[i], formatted_todo_completed_dict)
+            add_trace_with_hover(fig, dates, activity_daily_count[i], 'Todos done', 'white', 'solid', custom_hover_text_todo_completed, chart_visible_noted, True)
+        elif activities[i].lower() == "inspired juggle":
+            with open('/home/lunkwill/Documents/obsidyen/tail/inspired_juggling.txt') as f:
+                inspired_juggle_dict = json.load(f)
+            formatted_inspired_juggle_dict = format_extra_data_dict(inspired_juggle_dict)
+            custom_hover_text_inspired_juggle = create_hover_text(dates, activity_daily_count[i], formatted_inspired_juggle_dict)
+            add_trace_with_hover(fig, dates, activity_daily_count[i], 'Inspired juggle', 'yellow', 'solid', custom_hover_text_inspired_juggle, chart_visible_noted, True)
+        else:
+            fig.add_trace(go.Scatter(x=dates, y=activity_daily_count[i], name=activities[i], line=dict(color=color), visible=chart_visible_unnoted), secondary_y=True)
+        fig.add_trace(go.Scatter(x=dates, y=checked_activity_streak[i], name=activities[i]+' streak', line=dict(color=color, dash='dot'), visible='legendonly'), secondary_y=False)
 
     #if i < 2:
-        fig.add_trace(go.Scatter(x=dates, y=week_percentage, name=activities[i] + ' % week', line=dict(color=color, dash='dash'), visible=chart_visible), secondary_y=True)
-        fig.add_trace(go.Scatter(x=dates, y=month_percentage, name=activities[i] + ' % month', line=dict(color=color, dash='dashdot'), visible=chart_visible), secondary_y=True)
-        fig.add_trace(go.Scatter(x=dates, y=year_percentage, name=activities[i] + ' % year', line=dict(color=color, dash='longdash'), visible=chart_visible), secondary_y=True)
-        fig.add_trace(go.Scatter(x=dates, y=overall_percentage, name=activities[i] + ' % overall', line=dict(color=color, dash='longdashdot'), visible=chart_visible), secondary_y=True)
+        fig.add_trace(go.Scatter(x=dates, y=week_percentage, name=activities[i] + ' % week', line=dict(color=color, dash='dash'), visible='legendonly'), secondary_y=True)
+        fig.add_trace(go.Scatter(x=dates, y=month_percentage, name=activities[i] + ' % month', line=dict(color=color, dash='dashdot'), visible='legendonly'), secondary_y=True)
+        fig.add_trace(go.Scatter(x=dates, y=year_percentage, name=activities[i] + ' % year', line=dict(color=color, dash='longdash'), visible='legendonly'), secondary_y=True)
+        fig.add_trace(go.Scatter(x=dates, y=overall_percentage, name=activities[i] + ' % overall', line=dict(color=color, dash='longdashdot'), visible='legendonly'), secondary_y=True)
 
 
         # Assuming activity_daily_count is a list of numbers
@@ -575,9 +745,9 @@ def make_graph(daily_habits_count, list_of_habits, daily_net_streaks, daily_stre
         smoothed_activity_points_yearly = activity_daily_series.rolling(window=365).mean().tolist()
 
         # Your plotting code can remain the same, now that the lists are properly calculated
-        fig.add_trace(go.Scatter(x=dates, y=smoothed_activity_points_weekly, name=activities[i] + ' Weekly Smoothed', line=dict(color=color, dash='longdashdot'), visible=chart_visible), secondary_y=True)
-        fig.add_trace(go.Scatter(x=dates, y=smoothed_activity_points_monthly, name=activities[i] + ' Monthly Smoothed', line=dict(color=color, dash='dot'), visible=chart_visible), secondary_y=True)
-        fig.add_trace(go.Scatter(x=dates, y=smoothed_activity_points_yearly, name=activities[i] + ' Yearly Smoothed', line=dict(color=color, dash='solid'), visible=chart_visible), secondary_y=True)
+        fig.add_trace(go.Scatter(x=dates, y=smoothed_activity_points_weekly, name=activities[i] + ' Weekly Smoothed', line=dict(color=color, dash='longdashdot'), visible='legendonly'), secondary_y=True)
+        fig.add_trace(go.Scatter(x=dates, y=smoothed_activity_points_monthly, name=activities[i] + ' Monthly Smoothed', line=dict(color=color, dash='dot'), visible='legendonly'), secondary_y=True)
+        fig.add_trace(go.Scatter(x=dates, y=smoothed_activity_points_yearly, name=activities[i] + ' Yearly Smoothed', line=dict(color=color, dash='solid'), visible='legendonly'), secondary_y=True)
 
 
 

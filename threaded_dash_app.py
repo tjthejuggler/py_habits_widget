@@ -78,7 +78,7 @@ class DashApp(threading.Thread):
 
     def run(self):
 
-        self.fig = show_persistent_notes(self.fig)
+        #self.fig = show_persistent_notes(self.fig)
 
         # Adjust the height of the graph
         self.fig.update_layout(height=850)  # Adjust the height as needed
