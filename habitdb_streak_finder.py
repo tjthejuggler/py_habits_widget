@@ -280,7 +280,8 @@ def find_longest_streaks_and_antistreaks(start_date, end_date, activities, habit
         list_of_habits[current_date_str] = [habit for habit, inner_dict in habitsdb.items() if str(current_date) in inner_dict]
         #print(f'list of habits {current_date_str}', list_of_habits[current_date_str])
         # Initialize streak and antistreak dictionaries
-        current_all_time_best_streaks = current_all_time_worst_antistreaks = {activity: 0 for activity in activities}
+        current_all_time_best_streaks = {activity: 0 for activity in activities}
+        current_all_time_worst_antistreaks = {activity: 0 for activity in activities}
         habits_currently_all_time_besting = habits_currently_all_time_worsting = 0
 
         habits_currently_besting[current_date_str] = []
