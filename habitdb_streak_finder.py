@@ -163,7 +163,7 @@ def find_new_habits(habit_dict):
     return list_of_new_habits
 
 def find_longest_streaks_and_antistreaks(start_date, end_date, activities, habitsdb, show_graph, checked_activities):
-    print('checked_activities', checked_activities)
+    #print('checked_activities', checked_activities)
     date_format = '%Y-%m-%d'
     start_date_obj = datetime.strptime(start_date, date_format).date()
     end_date_obj = datetime.strptime(end_date, date_format).date()
@@ -245,15 +245,40 @@ def find_longest_streaks_and_antistreaks(start_date, end_date, activities, habit
     one_month_ago = end_date_obj - timedelta(days=30)
     one_year_ago = end_date_obj - timedelta(days=365)
 
+    list_of_new_highest_daily_value_habits = {}
+    higest_value_sofar = {}
+    new_highest_daily_value_habits_count = []
+    new_highest_weekly_value_habits_count = []
+    new_highest_monthly_value_habits_count = []
+    new_highest_yearly_value_habits_count = []
+    
+    highest_weekly_value_sofar = {activity: 0 for activity in activities}
+    list_of_new_highest_weekly_value_habits = {current_date_str: [] for current_date_str in dates}
+
+    highest_monthly_value_sofar = {activity: 0 for activity in activities}
+    list_of_new_highest_monthly_value_habits = {current_date_str: [] for current_date_str in dates}
+
+    highest_yearly_value_sofar = {activity: 0 for activity in activities}
+    list_of_new_highest_yearly_value_habits = {current_date_str: [] for current_date_str in dates}
+
     for i in range(len(activities)):
         activity_daily_count.append([])
         checked_activity_streak.append([])
+        higest_value_sofar[activities[i]] = 0
     current_date = start_date_obj
     while current_date <= end_date_obj:
         current_date_str = current_date.strftime(date_format)
         daily_counts = []
+        
+        list_of_new_highest_daily_value_habits[current_date_str] = []
+        list_of_new_highest_weekly_value_habits[current_date_str] = []
+        list_of_new_highest_monthly_value_habits[current_date_str] = []
+        list_of_new_highest_yearly_value_habits[current_date_str] = []
+        #new_highest_daily_value_habits_count[current_date_str] = 0
         for i, activity in enumerate(activities):
             count = habitsdb[activity].get(current_date_str, 0) * 10
+            (activity_daily_count[i])
+
             daily_counts.append(count)
             activity_daily_count[i].append(count)
             if count > 0:
@@ -262,7 +287,35 @@ def find_longest_streaks_and_antistreaks(start_date, end_date, activities, habit
                 streak = -1 if not checked_activity_streak[i] else checked_activity_streak[i][-1] - 1
             else:
                 streak = 0
-            checked_activity_streak[i].append(streak)        
+            checked_activity_streak[i].append(streak)
+            #check to see if todays value is the highest ever
+            if count > 0 and count > higest_value_sofar[activity]:
+                higest_value_sofar[activity] = count
+                list_of_new_highest_daily_value_habits[current_date_str].append(activity + " " + str(count))
+
+            weekly_count = sum(activity_daily_count[i][-7:]) if len(activity_daily_count[i]) >= 7 else 0
+            if weekly_count:
+                print('weekly_count', weekly_count, activity, current_date_str, highest_weekly_value_sofar[activity])
+                if weekly_count > 0 and weekly_count > highest_weekly_value_sofar[activity]:
+                    highest_weekly_value_sofar[activity] = weekly_count
+                    list_of_new_highest_weekly_value_habits[current_date_str].append(activity + " " + str(weekly_count))
+            
+            monthly_count = sum(activity_daily_count[i][-30:]) if len(activity_daily_count[i]) >= 30 else 0
+            if monthly_count:
+                if monthly_count > 0 and monthly_count > highest_monthly_value_sofar[activity]:
+                    highest_monthly_value_sofar[activity] = monthly_count
+                    list_of_new_highest_monthly_value_habits[current_date_str].append(activity + " " + str(monthly_count))
+            
+            yearly_count = sum(activity_daily_count[i][-365:]) if len(activity_daily_count[i]) >= 365 else 0
+            if yearly_count:
+                if yearly_count > 0 and yearly_count > highest_yearly_value_sofar[activity]:
+                    highest_yearly_value_sofar[activity] = yearly_count
+                    list_of_new_highest_yearly_value_habits[current_date_str].append(activity + " " + str(yearly_count))
+
+        new_highest_daily_value_habits_count.append(len(list_of_new_highest_daily_value_habits[current_date_str]))
+        new_highest_weekly_value_habits_count.append(len(list_of_new_highest_weekly_value_habits[current_date_str]))
+        new_highest_monthly_value_habits_count.append(len(list_of_new_highest_monthly_value_habits[current_date_str]))
+        new_highest_yearly_value_habits_count.append(len(list_of_new_highest_yearly_value_habits[current_date_str]))
         # Count the number of unique habits done on the current date
         unique_habits_count = sum(1 for count in daily_counts if count > 0)
 
@@ -419,6 +472,8 @@ def find_longest_streaks_and_antistreaks(start_date, end_date, activities, habit
     year_percentages_all = []
     overall_percentages_all = []
 
+    
+
     for i in range(len(activities)):
         week_percentage = calculate_moving_percentage(dates, activity_daily_count[i], 7)    # Last week
         month_percentage = calculate_moving_percentage(dates, activity_daily_count[i], 30)  # Last month
@@ -438,7 +493,7 @@ def find_longest_streaks_and_antistreaks(start_date, end_date, activities, habit
 
     if show_graph:
         # Create graph
-        make_graph(daily_habits_count, list_of_habits, daily_net_streaks, daily_streaks, daily_best_streaks, daily_best_streak_habit_count, daily_antistreaks, daily_worst_anti_streaks, daily_worst_anti_streak_habit_count, daily_total_points, smoothed_total_points_weekly, smoothed_total_points_monthly, dates, activities, checked_activities, currently_streaking_habits, currently_antistreaking_habits, list_of_new_habits, habits_currently_besting, habits_currently_worsting, week_average, month_average, year_average, overall_average, unique_habits_count_per_day, activity_daily_count, checked_activity_streak, week_percentages_all, month_percentages_all, year_percentages_all, overall_percentages_all, records)
+        make_graph(daily_habits_count, list_of_habits, daily_net_streaks, daily_streaks, daily_best_streaks, daily_best_streak_habit_count, daily_antistreaks, daily_worst_anti_streaks, daily_worst_anti_streak_habit_count, daily_total_points, smoothed_total_points_weekly, smoothed_total_points_monthly, dates, activities, checked_activities, currently_streaking_habits, currently_antistreaking_habits, list_of_new_habits, habits_currently_besting, habits_currently_worsting, week_average, month_average, year_average, overall_average, unique_habits_count_per_day, activity_daily_count, checked_activity_streak, week_percentages_all, month_percentages_all, year_percentages_all, overall_percentages_all, records, new_highest_daily_value_habits_count, list_of_new_highest_daily_value_habits, new_highest_weekly_value_habits_count, list_of_new_highest_weekly_value_habits, new_highest_monthly_value_habits_count, list_of_new_highest_monthly_value_habits, new_highest_yearly_value_habits_count, list_of_new_highest_yearly_value_habits)
 
 
     return (longest_streak_record, longest_antistreak_record, highest_net_streak_record, lowest_net_streak_record, 
@@ -581,7 +636,7 @@ def create_json_from_drmz_txt():
         json.dump(stories_dict, f, indent=4)
 
 
-def make_graph(daily_habits_count, list_of_habits, daily_net_streaks, daily_streaks, daily_best_streaks, daily_best_streak_habit_count, daily_antistreaks, daily_worst_anti_streaks, daily_worst_anti_streak_habit_count, daily_total_points, smoothed_total_points_weekly, smoothed_total_points_monthly, dates, activities, checked_activities, currently_streaking_habits, currently_antistreaking_habits, list_of_new_habits, habits_currently_besting, habits_currently_worsting, week_average, month_average, year_average, overall_average, unique_habits_per_day, activity_daily_count, checked_activity_streak, week_percentages_all, month_percentages_all, year_percentages_all, overall_percentages_all, records):
+def make_graph(daily_habits_count, list_of_habits, daily_net_streaks, daily_streaks, daily_best_streaks, daily_best_streak_habit_count, daily_antistreaks, daily_worst_anti_streaks, daily_worst_anti_streak_habit_count, daily_total_points, smoothed_total_points_weekly, smoothed_total_points_monthly, dates, activities, checked_activities, currently_streaking_habits, currently_antistreaking_habits, list_of_new_habits, habits_currently_besting, habits_currently_worsting, week_average, month_average, year_average, overall_average, unique_habits_per_day, activity_daily_count, checked_activity_streak, week_percentages_all, month_percentages_all, year_percentages_all, overall_percentages_all, records, new_highest_daily_value_habits_count, list_of_new_highest_daily_value_habits, new_highest_weekly_value_habits_count, list_of_new_highest_weekly_value_habits, new_highest_monthly_value_habits_count, list_of_new_highest_monthly_value_habits, new_highest_yearly_value_habits_count, list_of_new_highest_yearly_value_habits):
 
     ordered_streaks_per_date = {}
     # Iterate over the dates in currently_streaking_habits
@@ -609,19 +664,31 @@ def make_graph(daily_habits_count, list_of_habits, daily_net_streaks, daily_stre
     if len(checked_activities) > 0:
         chart_visible = 'legendonly'
 
-    add_trace_with_hover(fig, dates, daily_habits_count, 'Habits count', 'red', 'solid', custom_hover_text_for_list_of_habits, chart_visible, True)
+    add_trace_with_hover(fig, dates, daily_habits_count, 'Habits count', 'black', 'solid', custom_hover_text_for_list_of_habits, chart_visible, True)
     fig.add_trace(go.Scatter(x=dates, y=daily_net_streaks, name='Net streaks', line=dict(color='green'),visible=chart_visible), secondary_y=False)
     add_trace_with_hover(fig, dates, daily_streaks, 'Streaks', 'blue', 'solid', custom_hover_text_currently_streaking_habits, chart_visible, False)
     add_trace_with_hover(fig, dates, daily_best_streaks, 'Best streaks', 'blue', 'dash', custom_hover_text_best_streaks, chart_visible, False)
     add_trace_with_hover(fig, dates, daily_best_streak_habit_count, 'Best streak habits count', 'blue', 'dot', custom_hover_text_best_streak_habit_count, chart_visible, True)
-    add_trace_with_hover(fig, dates, daily_antistreaks, 'Anti-streaks', 'yellow', 'solid', custom_hover_text_currently_antistreaking_habits, chart_visible, False)
-    add_trace_with_hover(fig, dates, daily_worst_anti_streaks, 'Worst anti-streaks', 'yellow', 'dash', custom_hover_text_worst_anti_streaks, chart_visible, False)
-    add_trace_with_hover(fig, dates, daily_worst_anti_streak_habit_count, 'Worst anti-streak habits count', 'yellow', 'dot', custom_hover_text_worst_anti_streak_habit_count, chart_visible, True)
+    add_trace_with_hover(fig, dates, daily_antistreaks, 'Anti-streaks', 'red', 'solid', custom_hover_text_currently_antistreaking_habits, chart_visible, False)
+    add_trace_with_hover(fig, dates, daily_worst_anti_streaks, 'Worst anti-streaks', 'red', 'dash', custom_hover_text_worst_anti_streaks, chart_visible, False)
+    add_trace_with_hover(fig, dates, daily_worst_anti_streak_habit_count, 'Worst anti-streak habits count', 'red', 'dot', custom_hover_text_worst_anti_streak_habit_count, chart_visible, True)
 
     # Add traces for total points and smoothed total points
     fig.add_trace(go.Scatter(x=dates, y=daily_total_points, name='Daily Total Points', line=dict(color='grey'), visible=chart_visible), secondary_y=True)
     fig.add_trace(go.Scatter(x=dates, y=smoothed_total_points_weekly, name='Weekly Smoothed Total Points', line=dict(color='black'), visible=chart_visible), secondary_y=True)
     fig.add_trace(go.Scatter(x=dates, y=smoothed_total_points_monthly, name='Monthly Smoothed Total Points', line=dict(color='purple'), visible=chart_visible), secondary_y=True)
+
+    custom_hover_text_for_new_highest_daily_value_count = create_hover_text(dates, new_highest_daily_value_habits_count, list_of_new_highest_daily_value_habits)
+    add_trace_with_hover(fig, dates, new_highest_daily_value_habits_count, 'New Highest Daily Values', 'green', 'solid', custom_hover_text_for_new_highest_daily_value_count, chart_visible, True)
+
+    custom_hover_text_for_new_highest_weekly_value_count = create_hover_text(dates, new_highest_weekly_value_habits_count, list_of_new_highest_weekly_value_habits)
+    add_trace_with_hover(fig, dates, new_highest_weekly_value_habits_count, 'New Highest Weekly Values', 'blue', 'solid', custom_hover_text_for_new_highest_weekly_value_count, chart_visible, True)
+
+    custom_hover_text_for_new_highest_monthly_value_count = create_hover_text(dates, new_highest_monthly_value_habits_count, list_of_new_highest_monthly_value_habits)
+    add_trace_with_hover(fig, dates, new_highest_monthly_value_habits_count, 'New Highest Monthly Values', 'red', 'solid', custom_hover_text_for_new_highest_monthly_value_count, chart_visible, True)
+
+    custom_hover_text_for_new_highest_yearly_value_count = create_hover_text(dates, new_highest_yearly_value_habits_count, list_of_new_highest_yearly_value_habits)
+    add_trace_with_hover(fig, dates, new_highest_yearly_value_habits_count, 'New Highest Yearly Values', 'purple', 'solid', custom_hover_text_for_new_highest_yearly_value_count, chart_visible, True)
 
     color_list = ["red", "orange", "green", "blue", "pink", "yellow", "white", "purple", "gray", "black"]
 
@@ -728,6 +795,8 @@ def make_graph(daily_habits_count, list_of_habits, daily_net_streaks, daily_stre
             add_trace_with_hover(fig, dates, activity_daily_count[i], 'Inspired juggle', 'yellow', 'solid', custom_hover_text_inspired_juggle, chart_visible_noted, True)
         else:
             fig.add_trace(go.Scatter(x=dates, y=activity_daily_count[i], name=activities[i], line=dict(color=color), visible=chart_visible_unnoted), secondary_y=True)
+            # custom_hover_text_activity = create_hover_text(dates, activity_daily_count[i], {date: [activities[i]+" - "+str(activity_daily_count[i][0])] for date in dates})
+            # add_trace_with_hover(fig, dates, activity_daily_count[i], activities[i], color, 'solid', custom_hover_text_activity, chart_visible_noted, True)
         fig.add_trace(go.Scatter(x=dates, y=checked_activity_streak[i], name=activities[i]+' streak', line=dict(color=color, dash='dot'), visible='legendonly'), secondary_y=False)
 
     #if i < 2:
@@ -807,7 +876,7 @@ def make_graph(daily_habits_count, list_of_habits, daily_net_streaks, daily_stre
     stats = stats.split('\n')
     stats = ['['+str(i) + '] ' + stats[i] + ' (off)' for i in range(len(stats))]
     stats = '\n'.join(stats)
-    print(stats)
+    #print(stats)
 
 
     highest_date = max(currently_streaking_habits.keys(), key=lambda date: datetime.strptime(date, '%Y-%m-%d'))

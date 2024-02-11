@@ -18,10 +18,10 @@ import subprocess
 #change obsidian_dir to this for zenbook ~/Documents/obsidian_note_vault/noteVault
 
 class ButtonWithCheckbox(QWidget):
-    def __init__(self, activity, left_number, right_number, parent=None):
+    def __init__(self, activity, left_number, current_values, all_time_high_values, right_number, parent=None):
         super().__init__(parent)
         self.activity = activity
-        self.button = NumberedButton(left_number, right_number, self)
+        self.button = NumberedButton(left_number, current_values, all_time_high_values, right_number, self)
         self.checkbox = QCheckBox(self)
         self.checkbox.setFixedSize(20,20)  # Adjust the size of the checkbox as needed
 
@@ -42,16 +42,27 @@ def notify(message):
     os.system(msg)
     
 class NumberedButton(QPushButton):
-    def __init__(self, left_number, right_number, *args, **kwargs):
+    def __init__(self, left_number, current_values, all_time_high_values, right_number, *args, **kwargs):
         super(NumberedButton, self).__init__(*args, **kwargs)
         self.left_number = left_number
+        self.upper_left_number = int(all_time_high_values["day"][1])
         self.right_number = right_number
+        # Set the tooltip with HTML tags to make the text bigger
+        self.setToolTip(f'<nobr><font size="4">Current streak/antistreak: {self.left_number}<br>'
+                        f'Longest streak: {self.right_number}<br>'
+                        f'(current) All time high - date:<br>'
+                        f'day: ({current_values["day"]}) {all_time_high_values["day"][1]} - {all_time_high_values["day"][0]}<br>'
+                        f'week: ({current_values["week"]}) {all_time_high_values["week"][1]} - {all_time_high_values["week"][0]}<br>'
+                        f'month: ({current_values["month"]}) {all_time_high_values["month"][1]} - {all_time_high_values["month"][0]}<br>'
+                        f'year: ({current_values["year"]}) {all_time_high_values["year"][1]} - {all_time_high_values["year"][0]}<br></font></nobr>')
+
 
     def paintEvent(self, event):
         super(NumberedButton, self).paintEvent(event)
         painter = QPainter(self)
         painter.setFont(QFont("Arial", 12))
         painter.drawText(4, 66, str(self.left_number))
+        painter.drawText(4, 16, str(self.upper_left_number))
         right_number_length = len(str(self.right_number))
         painter.drawText(72-(right_number_length*8), 66, str(self.right_number))
 
@@ -88,7 +99,18 @@ class IconGrid(QWidget):
                 left_number = -days_since_not_zero
                 if days_since_not_zero < 2:
                     days_since_zero = get_days_since_zero_minus(inner_dict) 
-                    left_number = days_since_zero               
+                    left_number = days_since_zero
+                current_values = {}
+                current_values["day"] = inner_dict[list(inner_dict.keys())[-1]]
+                current_values["week"] = get_average_of_last_n_days(inner_dict,7)
+                current_values["month"] = get_average_of_last_n_days(inner_dict,30)
+                current_values["year"] = get_average_of_last_n_days(inner_dict,365)
+
+                all_time_high_values={}        
+                all_time_high_values["day"] = get_all_time_high_rolling(inner_dict,1)
+                all_time_high_values["week"] = get_all_time_high_rolling(inner_dict,7)
+                all_time_high_values["month"] = get_all_time_high_rolling(inner_dict,30)
+                all_time_high_values["year"] = get_all_time_high_rolling(inner_dict,365)
                 right_number = longest_streak = get_longest_streak(inner_dict)
                 last_value_from_habitsdb = list(inner_dict.values())[-1]
                 value_from_habitsdb_to_add = habitsdb_to_add[activities[i]]
@@ -129,7 +151,8 @@ class IconGrid(QWidget):
                 icon_finder = IconFinder()
                 icon = icon_finder.find_icon(activities[i])
                 icon_file = icon + '.png'
-                icons_and_scripts.append((icon_dir + icon_file, activities[i], activities[i], left_number, right_number))
+                
+                icons_and_scripts.append((icon_dir + icon_file, activities[i], activities[i], left_number, current_values, all_time_high_values, right_number))
 
             else:
                 icons_and_scripts.append(None)
@@ -156,8 +179,8 @@ class IconGrid(QWidget):
             for row in range(1, num_rows + 1):
                 if index < len(icons_and_scripts):
                     if icons_and_scripts[index] is not None:
-                        icon, arg, activity, left_number, right_number = icons_and_scripts[index]
-                        button_with_checkbox = ButtonWithCheckbox(activity, left_number, right_number, self)
+                        icon, arg, activity, left_number, current_values, all_time_high_values, right_number = icons_and_scripts[index]
+                        button_with_checkbox = ButtonWithCheckbox(activity, left_number, current_values, all_time_high_values, right_number, self)
                         button_with_checkbox.button.setIcon(QIcon(icon))
                         button_with_checkbox.button.setIconSize(QSize(64, 64))
                         button_with_checkbox.button.clicked.connect(lambda checked, a=arg: self.increment_habit(a))
@@ -266,7 +289,7 @@ class IconGrid(QWidget):
         for index, item in enumerate(icons_and_scripts):
             if item is not None:
                 #print("item", item)
-                icon, _, _, left_number, right_number = item
+                icon, _, _, left_number, current_values, all_time_high_values, right_number = item
                 self.button_with_checkboxes[button_index].button.setIcon(QIcon(icon))
                 button_index += 1
 
@@ -276,7 +299,7 @@ class IconGrid(QWidget):
 
         for item in icons_and_scripts:
             if item is not None:
-                icon, arg, activity, left_number, right_number = item
+                icon, arg, activity, left_number, current_values, all_time_high_values, right_number = item
                 
                 habitsdb = make_json(obsidian_dir+'habitsdb.txt')
                 habitsdb_to_add = make_json(obsidian_dir+'habitsdb_to_add.txt')
