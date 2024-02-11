@@ -5,11 +5,23 @@ from dash.dependencies import Input, Output, State
 import threading
 from datetime import datetime, timedelta
 import pandas as pd
+import chartgpt as cg  # Assuming this is your chart library
 import plotly.graph_objs as go
 from plotly.graph_objs import Figure
 import json
 
 NOTES_FILEPATH = '/home/lunkwill/projects/py_habits_widget/persistent_plotly_notes.txt'
+
+def generate_chart(chart_prompt):
+    df = pd.read_csv('output.csv')
+    with open('openai_api_key.txt', 'r') as file:
+        api_key = file.read().strip()
+
+    chart = cg.Chart(df, api_key=api_key)
+    # Assuming chart.plot() can return a URL or file path to the generated chart image
+    # For this example, let's assume it saves an image and returns its file path
+    image_path = chart.plot(chart_prompt)
+    return image_path
 
 def get_list_from_dict_and_date(self, ordered_streaks_per_date, date):
     streaks = ordered_streaks_per_date[date]
@@ -86,10 +98,15 @@ class DashApp(threading.Thread):
         # Create a Dash app
         app = dash.Dash(__name__)
 
+
+
+
         app.layout = html.Div([
             html.Button('Reset to Today', id='reset-button', n_clicks=0),
             #make a div that shows self.highest_points_date, self.highest_points
             html.Button('Toggle Details', id='toggle-button', n_clicks=0),
+            # Div to display the chart image
+            html.Img(id='chart-image', src='', style={'max-width': '100%', 'height': 'auto'}),
             html.Div([
                 html.Div("Today:", style={'display': 'inline-block', 'padding-right': '10px'}),
                 html.Div(str(self.daily_streaks[-1]), style={'display': 'inline-block', 'padding-right': '20px'}),
@@ -141,6 +158,7 @@ class DashApp(threading.Thread):
                 dcc.Textarea(id='note-input', placeholder='Enter a note here...', style={'width': '100%', 'height': 100}),
                 html.Button('Submit Note', id='submit-note', n_clicks=0),
                 html.Button('AI', id='ai-button', n_clicks=0),
+                html.Button('Generate Chart', id='generate-chart-button', n_clicks=0),  # Button to generate the chart
             ]),
 
             html.Div(id='click-data'),  # Div to display the annotation
@@ -165,6 +183,17 @@ class DashApp(threading.Thread):
             ], style={'padding-top': '5px'})  # Minimal padding at the top of the text boxes
             
         ])
+        # Callback for generating and updating the chart
+        @app.callback(
+            dash.dependencies.Output('chart-image', 'src'),
+            [dash.dependencies.Input('generate-chart-button', 'n_clicks'),
+            dash.dependencies.Input('note-input', 'value')],
+        )
+        def update_chart(n_clicks, chart_prompt):
+            if n_clicks > 0 and chart_prompt:
+                image_path = generate_chart(chart_prompt)
+                return app.get_asset_url(image_path)  # Assuming the image is saved in the assets folder
+            return None  # Return a default image or nothing if no chart is generated yet
 
         #from datetime import datetime
         @app.callback(
