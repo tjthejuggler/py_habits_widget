@@ -15,6 +15,8 @@ import re
 import math
 import subprocess
 
+import habit_helper
+
 #change obsidian_dir to this for zenbook ~/Documents/obsidian_note_vault/noteVault
 
 class ButtonWithCheckbox(QWidget):
@@ -308,30 +310,30 @@ class IconGrid(QWidget):
                 sorted_dates = sorted(inner_dict.keys(), reverse=True)
                 current_habit_today = inner_dict[sorted_dates[0]] + habitsdb_to_add[arg]
 
-                def adjust_habit_count(count, habit_name):
-                    if "Pushups" in habit_name:
-                        return math.floor(count / 30 + 0.5)
-                    elif "Situps" in habit_name:
-                        return math.floor(count / 50 + 0.5)
-                    elif "Squats" in habit_name:
-                        return math.floor(count / 30 + 0.5)
-                    elif "Cold Shower" in habit_name:
-                        if count > 0 and count < 3:
-                            count = 3
-                        return math.floor(count / 3 + 0.5)
-                    else:
-                        return count
+                # def adjust_habit_count(count, habit_name):
+                #     if "Pushups" in habit_name:
+                #         return math.floor(count / 30 + 0.5)
+                #     elif "Situps" in habit_name:
+                #         return math.floor(count / 50 + 0.5)
+                #     elif "Squats" in habit_name:
+                #         return math.floor(count / 30 + 0.5)
+                #     elif "Cold Shower" in habit_name:
+                #         if count > 0 and count < 3:
+                #             count = 3
+                #         return math.floor(count / 3 + 0.5)
+                #     else:
+                #         return count
 
-                today_total += adjust_habit_count(current_habit_today, arg)
+                today_total += habit_helper.adjust_habit_count(current_habit_today, arg)
 
                 last_7_days_count = 0
                 for date_str in sorted_dates[:7]:
-                    last_7_days_count += adjust_habit_count(inner_dict[date_str], arg)
+                    last_7_days_count += habit_helper.adjust_habit_count(inner_dict[date_str], arg)
                 last_7_days_total += last_7_days_count
 
                 last_30_days_count = 0
                 for date_str in sorted_dates[:30]:
-                    last_30_days_count += adjust_habit_count(inner_dict[date_str], arg)
+                    last_30_days_count += habit_helper.adjust_habit_count(inner_dict[date_str], arg)
                 last_30_days_total += last_30_days_count
 
         current_date_streak, current_date_antistreak, longest_streak_record, longest_antistreak_record, highest_net_streak_record, lowest_net_streak_record, week_average, month_average, year_average, overall_average = get_streak_numbers(False, [])
