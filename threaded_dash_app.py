@@ -326,13 +326,35 @@ class DashApp(threading.Thread):
                     with open(NOTES_FILEPATH, "w") as file:
                         json.dump(notes, file)
             elif button_id == 'ai-button' and note:
+                #user_input = "total points"  # Example user input
+                print(f"Number of traces: {len(figure['data'])}")
+
+                # Iterate over each trace in the figure's data
+                for i, trace in enumerate(figure['data']):
+                    # Debugging: Print available keys for each trace
+                    print(f"Trace {i} keys:", trace.keys())
+                    
+                    # Check if 'name' key exists in trace
+                    if 'name' in trace:
+                        # Now safely check if the user input string is in the trace's name
+                        if note.lower() in trace['name'].lower():
+                            # Toggle visibility based on current state
+                            if trace['visible'] == True:
+                                trace['visible'] = 'legendonly'
+                            else:
+                                trace['visible'] = True
+                    else:
+                        # Debugging: Print a message if a trace without a 'name' is encountered
+                        print(f"Trace {i} does not have a 'name' key.")
                 
-                print("2",note)
-                line_index = 0
-                if figure['data'][line_index]['visible'] == True:
-                    figure['data'][line_index]['visible'] = 'legendonly'
-                else:
-                    figure['data'][line_index]['visible'] = True
+                # print("2",note)
+                # line_index = 0
+                # if figure['data'][line_index]['visible'] == True:
+                #     figure['data'][line_index]['visible'] = 'legendonly'
+                # else:
+                #     figure['data'][line_index]['visible'] = True
+
+
 
             figure_object = Figure(figure)
             figure = show_persistent_notes(figure_object)
