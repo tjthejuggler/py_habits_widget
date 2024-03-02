@@ -14,6 +14,7 @@ from plotly.subplots import make_subplots
 
 import dash
 import dash_core_components as dcc
+from dash import dcc
 from dash import html
 from datetime import datetime, timedelta
 import pandas as pd
@@ -26,6 +27,7 @@ import webbrowser
 import drmz_extract
 
 import habit_helper
+#import bar_chart_animation
 
 def make_json(directory):
     directory = os.path.expanduser(directory)
@@ -710,9 +712,6 @@ def make_graph(daily_habits_count, list_of_habits, daily_net_streaks, daily_stre
 
     color_list = ["red", "orange", "green", "blue", "pink", "yellow", "white", "purple", "gray", "black"]
 
-
-
-    # Your existing code
     drmz_json = {}
     drmz_json = drmz_extract.create_json_from_drmz_txt()
     daily_drmz_count = []
@@ -746,6 +745,37 @@ def make_graph(daily_habits_count, list_of_habits, daily_net_streaks, daily_stre
     add_trace_with_hover(fig, dates, daily_drmz_char_count, 'Drmz char count', 'purple', 'solid', custom_hover_text_for_drmz_char_count, chart_visible, True)
     fig.add_trace(go.Scatter(x=dates, y=smoothed_drmz_char_count_weekly, name='Weekly Smoothed Drmz char count', line=dict(color='purple', dash='dash'), visible=chart_visible), secondary_y=True)
     fig.add_trace(go.Scatter(x=dates, y=smoothed_drmz_char_count_monthly, name='Monthly Smoothed Drmz char count', line=dict(color='purple', dash='dot'), visible=chart_visible), secondary_y=True)
+
+    # smoothed_activity_points_weekly_full = []
+    # for i, act in enumerate(activity_daily_count):
+    #     habit_name = activities[i]
+    #     print('habit_name', habit_name)
+    #     if "widget" in habit_name.lower():
+    #         print('habit_name2              widget', habit_name)
+    #         #run every number in the list through the habit_helper.get_widget_count function
+    #         act = [habit_helper.adjust_habit_count(x, habit_name) for x in act]
+        
+    #     activity_daily_series = pd.Series(act)
+    #     smoothed_activity_points_weekly = activity_daily_series.rolling(window=30).mean().tolist()
+    #     smoothed_activity_points_weekly_full.append(smoothed_activity_points_weekly)
+    # # #---WOULD BE COOL TO GET NUMBER OF DREAMS IN WITH THIS
+    # # #THIS CODE CREATES AN ANIMATION FROM THE CSV FILE
+    # # Transpose the structure: Create a dictionary with activities as keys and lists of points as values
+    # activity_data = {activity: points for activity, points in zip(activities, smoothed_activity_points_weekly_full)}
+    # #activity_data = {activity: points for activity, points in zip(activities, activity_total_points)}
+    # # Creating a DataFrame with dates as index
+    # df = pd.DataFrame(activity_data, index=pd.to_datetime(dates))
+    # # Check if the DataFrame shape matches your expectations
+    # print("DataFrame shape:", df.shape)  # Should be (530, 52)
+    # # Save the DataFrame to a CSV file
+    # csv_filename = 'stats_animation.csv'
+    # df.to_csv(csv_filename)
+    # # If you want to verify a small part of your DataFrame
+    # print(df.head())  # Prints the first 5 rows
+    # print(df.tail())         
+
+    # bar_chart_animation.create_animation_from_csv(csv_filename, "all_habits_monthly_average_count")
+
 
     for i in range(len(activities)):
         color = color_list[i % 10]

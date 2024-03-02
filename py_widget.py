@@ -85,7 +85,7 @@ class IconGrid(QWidget):
     def get_icons_and_scripts(self):
         
         activities = [ 
-            'Unique juggle', 'Juggling record broke', 'Dream acted', 'Sleep watch', 'Apnea walked', 'Cold Shower Widget', 'Programming sessions', 'Book read', 'Create juggle', 'Fun juggle', 'Drm Review',  'Early phone', 'Apnea practiced', 'Launch Squats Widget', 'Juggling tech sessions', 'Podcast finished', 'Song juggle', 'Janki used', 'Lucidity trained', 'Anki created', 'Apnea apb', 'Launch Situps Widget', 'Writing sessions', 'Educational video watched', 'None', 'Filmed juggle', 'Unusual experience', 'Anki mydis done', 'Apnea spb', 'Launch Pushups Widget', 'UC post', 'Article read', 'None', 'Inspired juggle', 'Meditations', 'Health learned', 'Lung stretch', 'Cardio sessions', 'AI tool', 'Read academic', 'None', 'Juggle goal', 'Kind stranger', 'Took pills', 'None', 'Good posture',  'Drew', 'Language studied', 'None', 'None', 'Broke record', 'Flossed', 'None', 'HIT', 'Question asked', 'Music listen', 'None', 'None', 'Grumpy blocker', 'None', 'Todos done', 'None', 'None', 'Memory practice'
+            'Unique juggle', 'Juggling record broke', 'Dream acted', 'Sleep watch', 'Apnea walked', 'Cold Shower Widget', 'Programming sessions', 'Book read', 'Create juggle', 'Fun juggle', 'Drm Review',  'Early phone', 'Apnea practiced', 'Launch Squats Widget', 'Juggling tech sessions', 'Podcast finished', 'Song juggle', 'Janki used', 'Lucidity trained', 'Anki created', 'Apnea apb', 'Launch Situps Widget', 'Writing sessions', 'Educational video watched', 'Move juggle', 'Filmed juggle', 'Unusual experience', 'Anki mydis done', 'Apnea spb', 'Launch Pushups Widget', 'UC post', 'Article read', 'None', 'Watch juggle', 'Meditations', 'Some anki', 'Lung stretch', 'Cardio sessions', 'AI tool', 'Read academic', 'None', 'Inspired juggle', 'Kind stranger', 'Health learned', 'None', 'Good posture',  'Drew', 'Language studied', 'None', 'Juggle goal', 'Broke record',  'Took pills', 'None', 'HIT', 'Question asked', 'Music listen', 'None',  'Balanced', 'Grumpy blocker', 'Flossed', 'Todos done', 'Fresh air', 'Talk stranger', 'Memory practice'
             ]
 
         habitsdb = make_json(obsidian_dir+'habitsdb.txt')
@@ -352,6 +352,7 @@ class IconGrid(QWidget):
         last_30_days_average = math.floor(last_30_days_average * 10 + 0.5) / 10
         with open(streaks_dir, 'w') as f:
             json.dump({"net_streak": net_streak, "highest_net_streak_record":highest_net_streak_record,"lowest_net_streak_record":lowest_net_streak_record,"current_streak": current_date_streak, "longest_streak": longest_streak_record, "current_antistreak": current_date_antistreak, "longest_antistreak": longest_antistreak_record,"today_total":today_total,"last_7_days_average":last_7_days_average,"last_30_days_average":last_30_days_average, "week_average":int(week_average[-1]), "month_average":int(month_average[-1]), "year_average":int(year_average[-1]),"overall_average":int(overall_average[-1]) }, f, indent=4, sort_keys=True)
+            
 def get_icon_image_based_on_theme(current_theme):
     if current_theme == "Moe-Dark":
         icon_path = '/home/lunkwill/projects/py_habits_widget/icons/Screenshot_20231124_181238.png'

@@ -53,6 +53,12 @@ class IconFinder:
             'Grumpy blocker':'lock_heart',
             'Lucidity trained':'train8_sc43',
             'HIT':'animal_crocodile_sc43',
+            'Some anki': 'paperclip',
+            'Move juggle': 'arrows_rotated',
+            'Watch juggle': 'magnifying_glass_ps',
+            'Fresh air': 'tree_palm4',
+            'Talk stranger': 'magnet',
+            'Balanced': 'letter_ii'
         }
 
         # Create a dictionary with the reverse mapping from icons to activities

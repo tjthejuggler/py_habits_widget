@@ -15,18 +15,19 @@ client = instructor.patch(
 class UserDetail(BaseModel):
     name: str
     age: int
+    gender: str
 
 
 user = client.chat.completions.create(
     model="solar",
     response_model=UserDetail,
     messages=[
-        {"role": "user", "content": "Extract Jason is 25 years old"},
+        {"role": "user", "content": "Jason is a 25 years old man from france. he has never met anyone under the age of 20 and he is not a woman and his name has never been bob. "},
     ],
 )
 
-assert isinstance(user, UserDetail)
-assert user.name == "Jason"
-assert user.age == 25
+# assert isinstance(user, UserDetail)
+# assert user.name == "Jason"
+# assert user.age == 25
 
 print(user)

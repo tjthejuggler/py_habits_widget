@@ -1,3 +1,6 @@
 persistent_plotly_notes.txt
 openai_api_key.txt
 output.csv
+*.csv
+/bar_chart_race_videos
+*.mp4

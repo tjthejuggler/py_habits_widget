@@ -37,10 +37,7 @@ def output_habits_per_day():
                 count = adjust_habit_count(count, habit_name)
                 f.write(f"{date_str}: {count}\n")
 
-
-
 habits = make_json(obsidian_dir+'habitsdb.txt')
-
 
 # Get a list of all the dates
 dates = sorted(set(date for habit in habits.values() for date in habit.keys()))
@@ -55,3 +52,12 @@ totals.reverse()
 with open('/home/lunkwill/Documents/obsidyen/habitCounters/total_habits.txt2', 'w') as f:
     f.write(','.join(str(total) for total in totals))
 
+#get the average of the first 7 numbes in totals
+week_average = sum(totals[:7]) / 7
+month_average = sum(totals[:30]) / 30
+
+with open('/home/lunkwill/Documents/obsidyen/habitCounters/week_average.txt', 'w') as f:
+    f.write(str(week_average))
+
+with open('/home/lunkwill/Documents/obsidyen/habitCounters/month_average.txt', 'w') as f:
+    f.write(str(month_average))
