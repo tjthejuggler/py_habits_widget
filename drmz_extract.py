@@ -13,8 +13,9 @@ def create_json_from_drmz_txt():
     # Iterate over the lines in the file
     for line in lines:
         # If the line is a date, save it as the current date
-        if re.match(r'\d{4}-\d{2}-\d{2}', line.strip()):
-            current_date = line.strip()
+        # If the line is a date, save it as the current date
+        if re.match(r'\d{4}-\d{2}-\d{2}( \d{2}:\d{2}:\d{2})?', line.strip()):
+            current_date = line.strip().split()[0]
         # If the line is part of a story, add it to the current story
         elif line.strip() != "" and line.strip() != ",,,":
             current_story += line.strip() + " "

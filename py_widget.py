@@ -93,6 +93,8 @@ class IconGrid(QWidget):
 
         icons_and_scripts = []
 
+        total_right_number = 0
+
         for i in range(len(activities)):
             if activities[i] in habitsdb:
                 inner_dict = habitsdb[activities[i]]
@@ -114,6 +116,7 @@ class IconGrid(QWidget):
                 all_time_high_values["month"] = get_all_time_high_rolling(inner_dict,30)
                 all_time_high_values["year"] = get_all_time_high_rolling(inner_dict,365)
                 right_number = longest_streak = get_longest_streak(inner_dict)
+                total_right_number += right_number
                 last_value_from_habitsdb = list(inner_dict.values())[-1]
                 value_from_habitsdb_to_add = habitsdb_to_add[activities[i]]
                 last_value = last_value_from_habitsdb + value_from_habitsdb_to_add
@@ -129,10 +132,10 @@ class IconGrid(QWidget):
                         last_value = 3
                     last_value = math.floor(last_value/3 + 0.5)
 
-                print(activities[i], last_value)
+                #print(activities[i], last_value)
                 #round last_value
                 last_value = math.floor(last_value + 0.5)
-                print(activities[i], last_value)
+                #print(activities[i], last_value)
 
                 icon_folder = 'redgoldpainthd'
                 if last_value == 1:
@@ -158,7 +161,7 @@ class IconGrid(QWidget):
 
             else:
                 icons_and_scripts.append(None)
-
+        print("total_right_number", total_right_number)
         return icons_and_scripts
 
 

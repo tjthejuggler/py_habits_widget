@@ -1,7 +1,10 @@
 import dash
-import dash_core_components as dcc
-import dash_html_components as html
-from dash.dependencies import Input, Output, State
+#import dash_core_components as dcc
+from dash import dcc
+#import dash_html_components as html
+from dash import html
+from dash import callback_context
+from dash.dependencies import Input, Output, State, MATCH
 import threading
 from datetime import datetime, timedelta
 import pandas as pd
@@ -9,8 +12,19 @@ import chartgpt as cg  # Assuming this is your chart library
 import plotly.graph_objs as go
 from plotly.graph_objs import Figure
 import json
+import os
+from flask import send_from_directory
+from datetime import date
+import subprocess
+import threading
+
 
 NOTES_FILEPATH = '/home/lunkwill/projects/py_habits_widget/persistent_plotly_notes.txt'
+
+def open_video(video_name):
+    video_path = os.path.join("/home/lunkwill/projects/small_scripts/modified_videos", video_name)
+    subprocess.run(["vlc", video_path])
+    return "Opening " + video_name
 
 def generate_chart(chart_prompt):
     df = pd.read_csv('output.csv')
@@ -24,13 +38,17 @@ def generate_chart(chart_prompt):
     return image_path
 
 def get_list_from_dict_and_date(self, ordered_streaks_per_date, date):
-    streaks = ordered_streaks_per_date[date]
+    streaks = []
+    if date in ordered_streaks_per_date:
+        streaks = ordered_streaks_per_date[date]
     streak_list_longest_ordered = '\n'.join(streaks)
     streak_list_longest_ordered = dcc.Textarea(value=streak_list_longest_ordered, style={'width': '100%', 'height': 200})
     return streak_list_longest_ordered
 
 def get_list_distance_from_best_streak(self, ordered_streaks_per_date, date):
-    streaks = ordered_streaks_per_date[date]
+    streaks = []
+    if date in ordered_streaks_per_date:
+        streaks = ordered_streaks_per_date[date]
     streaks_with_difference = []
 
     for streak in streaks:
@@ -55,6 +73,31 @@ def get_list_distance_from_best_streak(self, ordered_streaks_per_date, date):
     streak_list_distance_from_best_streak = '\n'.join(sorted_streaks)
 
     return dcc.Textarea(value=streak_list_distance_from_best_streak, style={'width': '100%', 'height': 200})
+
+# Modify the get_videos_from_date function to remove the target="_blank" attribute
+def get_videos_from_date(self, date):
+    videos_posted_directory = "/home/lunkwill/projects/small_scripts/modified_videos"
+
+    # Convert the date string to a datetime.date object
+    date = datetime.strptime(date, "%Y-%m-%d").date()
+
+    # Get list of videos in the directory
+    videos = [f for f in os.listdir(videos_posted_directory) if os.path.isfile(os.path.join(videos_posted_directory, f))]
+
+    # Get the modified dates of the videos
+    video_dates = [datetime.fromtimestamp(os.path.getmtime(os.path.join(videos_posted_directory, video))).date() for video in videos]
+
+    # Create a DataFrame with video dates and names
+    df = pd.DataFrame({'date': video_dates, 'video': videos})
+    videos_of_date = df[df['date'] == date]['video'].tolist()
+
+
+
+    # Create a list of clickable links
+    #video_links = [html.A(video, href=f"/video/{video}") for video in videos_of_date]
+    video_links = [html.Button(video, id={'type': 'video-button', 'index': i}, n_clicks=0) for i, video in enumerate(videos_of_date)]
+
+    return video_links
 
 def show_persistent_notes(figure):
         # Load the notes from the file
@@ -180,10 +223,20 @@ class DashApp(threading.Thread):
                     html.H4('antistreak_list_longest_ordered'),
                     html.Div(id='my-textbox4',  style={'overflow': 'auto', 'height': '200px', 'border': '1px solid #ddd', 'padding': '10px'}),
                 ], style={'width': '15%', 'display': 'inline-block', 'vertical-align': 'top', 'padding': '10px'}),
-            ], style={'padding-top': '5px'})  # Minimal padding at the top of the text boxes
-            
+            ], style={'padding-top': '5px'}),  # Minimal padding at the top of the text boxes
+            html.Div([
+                html.H4('Video Files'),
+                html.Div(id='my-textbox5', style={'overflow': 'auto', 'height': '200px', 'border': '1px solid #ddd', 'padding': '10px'}),
+            ], style={'width': '30%', 'display': 'inline-block', 'vertical-align': 'top', 'padding': '10px'}),
+            dcc.DatePickerSingle(id='date-picker', date=date.today()),
+            html.Div(id='video-links'),
+            html.Video(id='video-player', controls=True),
+            html.Div(id='dummy-div', style={'display': 'none'}),
+
         ])
-        # Callback for generating and updating the chart
+
+
+
         @app.callback(
             dash.dependencies.Output('chart-image', 'src'),
             [dash.dependencies.Input('generate-chart-button', 'n_clicks'),
@@ -246,6 +299,7 @@ class DashApp(threading.Thread):
             Output('my-textbox2', 'children'),
             Output('my-textbox3', 'children'),
             Output('my-textbox4', 'children'),
+            Output('my-textbox5', 'children'),
             [Input('your-graph', 'clickData'),
             Input('reset-button', 'n_clicks')]
         )
@@ -254,7 +308,7 @@ class DashApp(threading.Thread):
                 ctx = dash.callback_context
 
                 if not ctx.triggered:
-                    return "Click on a point in the graph", dash.no_update, dash.no_update, dash.no_update, dash.no_update
+                    return "Click on a point in the graph", dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
                 else:
                     button_id = ctx.triggered[0]['prop_id'].split('.')[0]
             else:
@@ -265,14 +319,16 @@ class DashApp(threading.Thread):
             elif button_id == 'your-graph' and clickData is not None:
                 point_date = clickData['points'][0]['x']
             else:
-                return "Click on a point in the graph", dash.no_update, dash.no_update, dash.no_update, dash.no_update
+                return "Click on a point in the graph", dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
             
             new_text1 = get_list_distance_from_best_streak(self, self.ordered_streaks_per_date, point_date)
             new_text2 = get_list_distance_from_best_streak(self, self.ordered_antistreaks_per_date, point_date)
             new_text3 = get_list_from_dict_and_date(self, self.ordered_streaks_per_date, point_date)
             new_text4 = get_list_from_dict_and_date(self, self.ordered_antistreaks_per_date, point_date)
+            new_text5 = get_videos_from_date(self, point_date)
+            print("new_text5", new_text5)
             #return f"{point_date}", new_text1, new_text2, new_text3, new_text4
-            return clickData, new_text1, new_text2, new_text3, new_text4
+            return clickData, new_text1, new_text2, new_text3, new_text4, new_text5
         
 
         @app.callback(

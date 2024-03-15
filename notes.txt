@@ -1,0 +1,5 @@
+KEY
+Total Points - the sum of all my points through entire history
+Total Best Streaks - the sum of all of my best streaks ever for any given day
+Total Worst Anti-Streaks - the sum of all of my worst anti-streaks ever for any given day
+Total Net Streaks - the sum of all of my best streaks ever for any given day minus the sum of all of my worst anti-streaks ever for any given day
