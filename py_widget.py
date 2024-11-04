@@ -36,7 +36,7 @@ class ButtonWithCheckbox(QWidget):
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.layout.setSpacing(0)
 
-with open('/home/lunkwill/projects/py_habits_widget/obsidian_dir.txt', 'r') as f:
+with open('/home/twain/Projects/py_habits_widget/obsidian_dir.txt', 'r') as f:
     obsidian_dir = f.read().strip()
 
 def notify(message):
@@ -151,7 +151,7 @@ class IconGrid(QWidget):
                 elif last_value > 5:
                     icon_folder = 'transparentglasshd'
 
-                icon_dir = '~/projects/py_habits_widget/icons/'+icon_folder+'/'
+                icon_dir = '~/Projects/py_habits_widget/icons/'+icon_folder+'/'
                 icon_dir = os.path.expanduser(icon_dir)
                 icon_finder = IconFinder()
                 icon = icon_finder.find_icon(activities[i])
@@ -277,7 +277,7 @@ class IconGrid(QWidget):
             with open(habitsdb_to_add_dir, 'w') as f:
                 json.dump(habitsdb_to_add, f, indent=4, sort_keys=True)
             time.sleep(1)
-            update_theme_script = '~/projects/tail/habits_kde_theme.py'
+            update_theme_script = '~/Projects/tail/habits_kde_theme.py'
             update_theme_script = os.path.expanduser(update_theme_script)
             os.system('python3 '+update_theme_script)
             self.update_icons()
@@ -358,28 +358,28 @@ class IconGrid(QWidget):
             
 def get_icon_image_based_on_theme(current_theme):
     if current_theme == "Moe-Dark":
-        icon_path = '/home/lunkwill/projects/py_habits_widget/icons/Screenshot_20231124_181238.png'
+        icon_path = '/home/twain/Projects/py_habits_widget/icons/Screenshot_20231124_181238.png'
     elif current_theme == "E5150-Orange":
-        icon_path = '/home/lunkwill/projects/py_habits_widget/icons/Screenshot_20231124_181238.png'
+        icon_path = '/home/twain/Projects/py_habits_widget/icons/Screenshot_20231124_181238.png'
     elif current_theme == "spectrum-mawsitsit":
-        icon_path = '/home/lunkwill/projects/py_habits_widget/icons/Screenshot_20231217_084422.png'
+        icon_path = '/home/twain/Projects/py_habits_widget/icons/Screenshot_20231217_084422.png'
     elif current_theme == "Shadows-Global":
-        icon_path = '/home/lunkwill/projects/py_habits_widget/icons/Screenshot_20231203_091003.png'
+        icon_path = '/home/twain/Projects/py_habits_widget/icons/Screenshot_20231203_091003.png'
     elif current_theme == "spectrum-strawberryquartz":
-        icon_path = '/home/lunkwill/projects/py_habits_widget/icons/Screenshot_20231124_181238.png'
+        icon_path = '/home/twain/Projects/py_habits_widget/icons/Screenshot_20231124_181238.png'
     elif current_theme == "Neon-Knights-Yellow":
-        icon_path = '/home/lunkwill/projects/py_habits_widget/icons/Screenshot_20231124_234618.png'
+        icon_path = '/home/twain/Projects/py_habits_widget/icons/Screenshot_20231124_234618.png'
     elif current_theme == "Glassy":
-        icon_path = '/home/lunkwill/projects/py_habits_widget/icons/Screenshot_20231124_181238.png'
+        icon_path = '/home/twain/Projects/py_habits_widget/icons/Screenshot_20231124_181238.png'
     # else :
-    #     icon_path = '/home/lunkwill/projects/py_habits_widget/icons/redgoldpainthd/Screenshot_20231124_181238.png'
+    #     icon_path = '/home/twain/Projects/py_habits_widget/icons/redgoldpainthd/Screenshot_20231124_181238.png'
 
     return icon_path
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
 
-    with open('/home/lunkwill/projects/tail/kde_theme.txt', 'r') as f:
+    with open('/home/twain/Projects/tail/kde_theme.txt', 'r') as f:
         current_theme = f.read().strip()
 
     icon_path = get_icon_image_based_on_theme(current_theme)

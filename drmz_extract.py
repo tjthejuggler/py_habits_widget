@@ -2,7 +2,7 @@ import json
 import re
 
 def create_json_from_drmz_txt():
-    with open('/home/lunkwill/Documents/obsidyen/drmz.md', 'r') as f:
+    with open('/home/twain/noteVault/drmz.md', 'r') as f:
         drmz = f.read()
         lines = drmz.split('\n')
     # Initialize variables to hold the current date and story

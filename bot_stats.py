@@ -16,7 +16,7 @@ client = instructor.patch(
     mode=instructor.Mode.JSON,
 )
 
-with open ("/home/lunkwill/projects/py_habits_widget/stats_key.txt", "r") as myfile:
+with open ("/home/twain/Projects/py_habits_widget/stats_key.txt", "r") as myfile:
     STATS_KEY=myfile.read()
 
 prompt = \
@@ -96,8 +96,8 @@ except Exception as e:
 # User Query: {query}<bot_end>
 # '''
 
-# #/home/lunkwill/projects/py_habits_widget/stats_key.txt
-# with open ("/home/lunkwill/projects/py_habits_widget/stats_key.txt", "r") as myfile:
+# #/home/twain/Projects/py_habits_widget/stats_key.txt
+# with open ("/home/twain/Projects/py_habits_widget/stats_key.txt", "r") as myfile:
 #     STATS_KEY=myfile.read()
 
 # prompt = prompt.format(query="toggle every Juggling stat", stats_key=STATS_KEY)

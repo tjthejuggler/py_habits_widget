@@ -69,7 +69,7 @@ target_date = '2022-09-03'
 date_format = '%Y-%m-%d'
 target_date_obj = datetime.strptime(target_date, date_format).date()
 
-with open('/home/lunkwill/projects/tail/obsidian_dir.txt', 'r') as f:
+with open('/home/twain/Projects/tail/obsidian_dir.txt', 'r') as f:
     obsidian_dir = f.read().strip()
 
 habitsdb = make_json(obsidian_dir+'habitsdb.txt')
@@ -172,7 +172,7 @@ def find_new_habits(habit_dict):
     return list_of_new_habits
 
 def get_earliest_drmz_date():
-    file_path = '/home/lunkwill/Documents/obsidyen/drmz.md'
+    file_path = '/home/twain/noteVault/drmz.md'
     dates = extract_dates_from_notes(file_path)
     earliest_date = find_earliest_date(dates)
     if earliest_date:
@@ -682,7 +682,7 @@ def format_extra_data_dict(unusual_experience_dict):
     return new_dict
 
 def create_json_from_drmz_txt():
-    with open('/home/lunkwill/Documents/obsidyen/drmz.md', 'r') as f:
+    with open('/home/twain/noteVault/drmz.md', 'r') as f:
         drmz = f.read()
     # Initialize variables to hold the current date and story
     current_date = None
@@ -828,7 +828,7 @@ def make_graph(daily_habits_count, list_of_habits, daily_net_streaks, daily_stre
     # import plotly.graph_objects as go
     # import pandas as pd
 
-    videos_posted_directory = "/home/lunkwill/projects/small_scripts/modified_videos"
+    videos_posted_directory = "/home/twain/Projects/small_scripts/modified_videos"
 
     # Get list of videos in the directory
     videos = [f for f in os.listdir(videos_posted_directory) if os.path.isfile(os.path.join(videos_posted_directory, f))]
@@ -917,41 +917,41 @@ def make_graph(daily_habits_count, list_of_habits, daily_net_streaks, daily_stre
 
         #IF ACTIVITIES[I] IS UNUSUAL EVENTS THEN I SHOULD OPEN THE UE FILE AND PPLUG IN THE DATA FROM IT. I THINK PODCASTS, ARTICLES, OTHER STUFF WOULD BE GREAT AS WELL!
         if activities[i].lower() == "unusual experience":
-            with open('/home/lunkwill/Documents/obsidyen/tail/unusual_experiences.txt') as f:
+            with open('/home/twain/noteVault/tail/unusual_experiences.txt') as f:
                 unusual_experience_dict = json.load(f)
             formatted_unusual_experience_dict = format_extra_data_dict(unusual_experience_dict)
             custom_hover_text_unusual_experience = create_hover_text(dates, activity_daily_count[i], formatted_unusual_experience_dict)
             add_trace_with_hover(fig, dates, activity_daily_count[i], 'Unusual Experience', 'red', 'solid', custom_hover_text_unusual_experience, chart_visible_noted, True)
         elif activities[i].lower() == "book read":
-            with open('/home/lunkwill/Documents/obsidyen/tail/book_read_history.txt') as f:
+            with open('/home/twain/noteVault/tail/book_read_history.txt') as f:
                 books_read_dict = json.load(f)
             formatted_books_read_dict = format_extra_data_dict(books_read_dict)
             custom_hover_text_books_read = create_hover_text(dates, activity_daily_count[i], formatted_books_read_dict)
             add_trace_with_hover(fig, dates, activity_daily_count[i], 'Books Read', 'grey', 'solid', custom_hover_text_books_read, chart_visible_noted, True)
         elif activities[i].lower() == "article read":
-            with open('/home/lunkwill/Documents/obsidyen/tail/article_read_db.txt') as f:
+            with open('/home/twain/noteVault/tail/article_read_db.txt') as f:
                 articles_read_dict = json.load(f)
             print('articles_read_dict', articles_read_dict)
             formatted_articles_read_dict = format_extra_data_dict(articles_read_dict)
             custom_hover_text_articles_read = create_hover_text(dates, activity_daily_count[i], formatted_articles_read_dict)
             add_trace_with_hover(fig, dates, activity_daily_count[i], 'Articles Read', 'purple', 'solid', custom_hover_text_articles_read, chart_visible_noted, True)
         elif activities[i].lower() == "podcast finished":
-            with open('/home/lunkwill/Documents/obsidyen/tail/podcasts_history_2023_03_25_to_10_28.txt') as f:
+            with open('/home/twain/noteVault/tail/podcasts_history_2023_03_25_to_10_28.txt') as f:
                 podcasts_finished_dict1 = json.load(f)
-            with open('/home/lunkwill/Documents/obsidyen/tail/podcasts_history.txt') as f:
+            with open('/home/twain/noteVault/tail/podcasts_history.txt') as f:
                 podcasts_finished_dict2 = json.load(f)
             podcasts_finished_dict = {**podcasts_finished_dict1, **podcasts_finished_dict2}
             formatted_podcasts_finished_dict = format_extra_data_dict(podcasts_finished_dict)
             custom_hover_text_podcasts_finished = create_hover_text(dates, activity_daily_count[i], formatted_podcasts_finished_dict)
             add_trace_with_hover(fig, dates, activity_daily_count[i], 'Podcasts Finished', 'red', 'solid', custom_hover_text_podcasts_finished, chart_visible_noted, True)
         elif activities[i].lower() == "todos done":
-            with open('/home/lunkwill/Documents/obsidyen/tail/tododb.txt') as f:
+            with open('/home/twain/noteVault/tail/tododb.txt') as f:
                 todo_completed_dict = json.load(f)
             formatted_todo_completed_dict = format_extra_data_dict(todo_completed_dict)
             custom_hover_text_todo_completed = create_hover_text(dates, activity_daily_count[i], formatted_todo_completed_dict)
             add_trace_with_hover(fig, dates, activity_daily_count[i], 'Todos done', 'white', 'solid', custom_hover_text_todo_completed, chart_visible_noted, True)
         elif activities[i].lower() == "inspired juggle":
-            with open('/home/lunkwill/Documents/obsidyen/tail/inspired_juggling.txt') as f:
+            with open('/home/twain/noteVault/tail/inspired_juggling.txt') as f:
                 inspired_juggle_dict = json.load(f)
             formatted_inspired_juggle_dict = format_extra_data_dict(inspired_juggle_dict)
             custom_hover_text_inspired_juggle = create_hover_text(dates, activity_daily_count[i], formatted_inspired_juggle_dict)

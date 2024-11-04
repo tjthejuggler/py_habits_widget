@@ -11,7 +11,7 @@ import json
 from IconFinder import IconFinder
 import time
 
-with open('/home/lunkwill/projects/py_habits_widget/obsidian_dir.txt', 'r') as f:
+with open('/home/twain/Projects/py_habits_widget/obsidian_dir.txt', 'r') as f:
     obsidian_dir = f.read().strip()
 
 class NumberedButton(QPushButton):
@@ -150,14 +150,14 @@ class IconGrid(QWidget):
 
         #MAKE A GITHUB OF THIS!!
 
-                icon_dir = '~/projects/py_habits_widget/icons/'+icon_folder+'/'
+                icon_dir = '~/Projects/py_habits_widget/icons/'+icon_folder+'/'
                 icon_dir = os.path.expanduser(icon_dir)
 
                 icon_finder = IconFinder()
                 icon = icon_finder.find_icon(activities[i])
 
                 icon_file = icon + '.png'
-                # script_file = '~/projects/py_habits_widget/script.py'
+                # script_file = '~/Projects/py_habits_widget/script.py'
                 # script_file = os.path.expanduser(habitsdb_dir)
                 print(icon_dir + icon_file)
                 icons_and_scripts.append((icon_dir + icon_file, activities[i], left_number, right_number))
@@ -221,7 +221,7 @@ class IconGrid(QWidget):
                 json.dump(habitsdb_to_add, f, indent=4, sort_keys=True)
             self.update_icons()
             time.sleep(1)
-            update_theme_script = '~/projects/tail/habits_kde_theme.py'
+            update_theme_script = '~/Projects/tail/habits_kde_theme.py'
             update_theme_script = os.path.expanduser(update_theme_script)
             os.system('python3 '+update_theme_script)
         

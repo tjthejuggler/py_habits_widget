@@ -19,10 +19,10 @@ import subprocess
 import threading
 
 
-NOTES_FILEPATH = '/home/lunkwill/projects/py_habits_widget/persistent_plotly_notes.txt'
+NOTES_FILEPATH = '/home/twain/Projects/py_habits_widget/persistent_plotly_notes.txt'
 
 def open_video(video_name):
-    video_path = os.path.join("/home/lunkwill/projects/small_scripts/modified_videos", video_name)
+    video_path = os.path.join("/home/twain/Projects/small_scripts/modified_videos", video_name)
     subprocess.run(["vlc", video_path])
     return "Opening " + video_name
 
@@ -76,7 +76,7 @@ def get_list_distance_from_best_streak(self, ordered_streaks_per_date, date):
 
 # Modify the get_videos_from_date function to remove the target="_blank" attribute
 def get_videos_from_date(self, date):
-    videos_posted_directory = "/home/lunkwill/projects/small_scripts/modified_videos"
+    videos_posted_directory = "/home/twain/Projects/small_scripts/modified_videos"
 
     # Convert the date string to a datetime.date object
     date = datetime.strptime(date, "%Y-%m-%d").date()

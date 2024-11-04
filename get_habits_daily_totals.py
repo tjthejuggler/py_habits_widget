@@ -2,7 +2,7 @@ import os
 import json
 import math
 
-with open('/home/lunkwill/projects/py_habits_widget/obsidian_dir.txt', 'r') as f:
+with open('/home/twain/Projects/py_habits_widget/obsidian_dir.txt', 'r') as f:
     obsidian_dir = f.read().strip()
 
 def make_json(directory):
@@ -49,15 +49,15 @@ totals = [sum(adjust_habit_count(habit.get(date, 0), habit_name) for habit_name,
 totals.reverse()
 
 # Write the totals to a text file
-with open('/home/lunkwill/Documents/obsidyen/habitCounters/total_habits.txt2', 'w') as f:
+with open('/home/twain/noteVault/habitCounters/total_habits.txt2', 'w') as f:
     f.write(','.join(str(total) for total in totals))
 
 #get the average of the first 7 numbes in totals
 week_average = sum(totals[:7]) / 7
 month_average = sum(totals[:30]) / 30
 
-with open('/home/lunkwill/Documents/obsidyen/habitCounters/week_average.txt', 'w') as f:
+with open('/home/twain/noteVault/habitCounters/week_average.txt', 'w') as f:
     f.write(str(week_average))
 
-with open('/home/lunkwill/Documents/obsidyen/habitCounters/month_average.txt', 'w') as f:
+with open('/home/twain/noteVault/habitCounters/month_average.txt', 'w') as f:
     f.write(str(month_average))

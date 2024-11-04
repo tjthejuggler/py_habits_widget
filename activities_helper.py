@@ -7,7 +7,7 @@ def make_json(directory):
         my_json = json.load(f)
     return my_json
 
-with open('/home/lunkwill/projects/tail/obsidian_dir.txt', 'r') as f:
+with open('/home/twain/Projects/tail/obsidian_dir.txt', 'r') as f:
     obsidian_dir = f.read().strip()
 
 habitsdb = make_json(obsidian_dir+'habitsdb.txt')

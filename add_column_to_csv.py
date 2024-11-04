@@ -45,6 +45,6 @@ def add_column(csv_file, column_name, column_values):
 # # divide each value by 100
 # smoothed_drmz_char_count_monthly = [x / 100 for x in smoothed_drmz_char_count_monthly]
 
-# add_column('/home/lunkwill/projects/py_habits_widget/habits_count_smoothed_monthly.csv', 'drmz count', smoothed_drmz_count_monthly)
+# add_column('/home/twain/Projects/py_habits_widget/habits_count_smoothed_monthly.csv', 'drmz count', smoothed_drmz_count_monthly)
 
-# add_column('/home/lunkwill/projects/py_habits_widget/habits_count_smoothed_monthly.csv', 'drmz chars', smoothed_drmz_char_count_monthly)
+# add_column('/home/twain/Projects/py_habits_widget/habits_count_smoothed_monthly.csv', 'drmz chars', smoothed_drmz_char_count_monthly)
