@@ -17,8 +17,6 @@ import subprocess
 
 import habit_helper
 
-#change obsidian_dir to this for zenbook ~/Documents/obsidian_note_vault/noteVault
-
 class ButtonWithCheckbox(QWidget):
     def __init__(self, activity, left_number, current_values, all_time_high_values, right_number, parent=None):
         super().__init__(parent)
@@ -85,10 +83,19 @@ class IconGrid(QWidget):
     def get_icons_and_scripts(self):
         
         activities = [ 
-            'Unique juggle', 'Juggling record broke', 'Dream acted', 'Sleep watch', 'Apnea walked', 'Cold Shower Widget', 'Programming sessions', 'Book read', 'Create juggle', 'Fun juggle', 'Drm Review',  'Early phone', 'Apnea practiced', 'Launch Squats Widget', 'Juggling tech sessions', 'Podcast finished', 'Song juggle', 'Janki used', 'Lucidity trained', 'Anki created', 'Apnea apb', 'Launch Situps Widget', 'Writing sessions', 'Educational video watched', 'Move juggle', 'Filmed juggle', 'Unusual experience', 'Anki mydis done', 'Apnea spb', 'Launch Pushups Widget', 'UC post', 'Article read', 'None', 'Watch juggle', 'Meditations', 'Some anki', 'Lung stretch', 'Cardio sessions', 'AI tool', 'Read academic', 'None', 'Inspired juggle', 'Kind stranger', 'Health learned', 'None', 'Good posture',  'Drew', 'Language studied', 'None', 'Juggle goal', 'Broke record',  'Took pills', 'None', 'HIT', 'Question asked', 'Music listen', 'None',  'Balanced', 'Grumpy blocker', 'Flossed', 'Todos done', 'Fresh air', 'Talk stranger', 'Memory practice'
+            'Unique juggle', 'Juggling record broke', 'Dream acted', 'Sleep watch', 'Apnea walked', 'Cold Shower Widget', 'Programming sessions', 'Book read', 'Create juggle', 'Fun juggle', 'Drm Review',  'Early phone', 'Apnea practiced', 'Launch Squats Widget', 'Juggling tech sessions', 'Podcast finished', 'Song juggle', 'Janki used', 'Lucidity trained', 'Anki created', 'Apnea apb', 'Launch Situps Widget', 'Writing sessions', 'Educational video watched', 'Move juggle', 'Filmed juggle', 'Unusual experience', 'Anki mydis done', 'Apnea spb', 'Launch Pushups Widget', 'UC post', 'Article read', 'None', 'Watch juggle', 'Meditations', 'Some anki', 'Lung stretch', 'Cardio sessions', 'AI tool', 'Read academic', 'None', 'Inspired juggle', 'Kind stranger', 'Health learned', 'None', 'Good posture',  'Drew', 'Language studied', 'Magic practiced', 'Juggle goal', 'Broke record',  'Took pills', 'Fasted', 'HIT', 'Question asked', 'Music listen', 'Magic performed',  'Balanced', 'Grumpy blocker', 'Flossed', 'Todos done', 'Fresh air', 'Talk stranger', 'Memory practice'
             ]
 
+        # Load both habitsdb files and merge them
         habitsdb = make_json(obsidian_dir+'habitsdb.txt')
+        habitsdb_phone = make_json(obsidian_dir+'habitsdb_phone.txt')
+        
+        # Merge habitsdb_phone into habitsdb
+        for habit, dates in habitsdb_phone.items():
+            if habit not in habitsdb:
+                habitsdb[habit] = {}
+            habitsdb[habit].update(dates)
+
         habitsdb_to_add = make_json(obsidian_dir+'habitsdb_to_add.txt')
 
         icons_and_scripts = []
@@ -306,7 +313,16 @@ class IconGrid(QWidget):
             if item is not None:
                 icon, arg, activity, left_number, current_values, all_time_high_values, right_number = item
                 
+                # Load and merge both habitsdb files
                 habitsdb = make_json(obsidian_dir+'habitsdb.txt')
+                habitsdb_phone = make_json(obsidian_dir+'habitsdb_phone.txt')
+                
+                # Merge habitsdb_phone into habitsdb
+                if arg in habitsdb_phone:
+                    if arg not in habitsdb:
+                        habitsdb[arg] = {}
+                    habitsdb[arg].update(habitsdb_phone[arg])
+
                 habitsdb_to_add = make_json(obsidian_dir+'habitsdb_to_add.txt')
 
                 inner_dict = habitsdb[arg]

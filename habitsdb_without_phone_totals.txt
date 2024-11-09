@@ -1,0 +1,307 @@
+{
+    "AI tool": {
+        "days_since_not_zero": 0,
+        "days_since_zero": 2,
+        "longest_streak": 97
+    },
+    "Anki created": {
+        "days_since_not_zero": 21,
+        "days_since_zero": 0,
+        "longest_streak": 201
+    },
+    "Anki mydis done": {
+        "days_since_not_zero": 39,
+        "days_since_zero": 0,
+        "longest_streak": 186
+    },
+    "Apnea apb": {
+        "days_since_not_zero": 53,
+        "days_since_zero": 0,
+        "longest_streak": 173
+    },
+    "Apnea practiced": {
+        "days_since_not_zero": 53,
+        "days_since_zero": 0,
+        "longest_streak": 9
+    },
+    "Apnea spb": {
+        "days_since_not_zero": 53,
+        "days_since_zero": 0,
+        "longest_streak": 3
+    },
+    "Apnea walked": {
+        "days_since_not_zero": 58,
+        "days_since_zero": 0,
+        "longest_streak": 3
+    },
+    "Article read": {
+        "days_since_not_zero": 4,
+        "days_since_zero": 0,
+        "longest_streak": 234
+    },
+    "Balanced": {
+        "days_since_not_zero": 28,
+        "days_since_zero": 0,
+        "longest_streak": 3
+    },
+    "Book read": {
+        "days_since_not_zero": 96,
+        "days_since_zero": 0,
+        "longest_streak": 122
+    },
+    "Broke record": {
+        "days_since_not_zero": 53,
+        "days_since_zero": 0,
+        "longest_streak": 4
+    },
+    "Cardio sessions": {
+        "days_since_not_zero": 102,
+        "days_since_zero": 0,
+        "longest_streak": 9
+    },
+    "Cold Shower Widget": {
+        "days_since_not_zero": 35,
+        "days_since_zero": 0,
+        "longest_streak": 92
+    },
+    "Create juggle": {
+        "days_since_not_zero": 53,
+        "days_since_zero": 0,
+        "longest_streak": 17
+    },
+    "Dream acted": {
+        "days_since_not_zero": 75,
+        "days_since_zero": 0,
+        "longest_streak": 31
+    },
+    "Drew": {
+        "days_since_not_zero": 53,
+        "days_since_zero": 0,
+        "longest_streak": 24
+    },
+    "Drm Review": {
+        "days_since_not_zero": 51,
+        "days_since_zero": 0,
+        "longest_streak": 114
+    },
+    "Early phone": {
+        "days_since_not_zero": 26,
+        "days_since_zero": 0,
+        "longest_streak": 233
+    },
+    "Educational video watched": {
+        "days_since_not_zero": 0,
+        "days_since_zero": 1,
+        "longest_streak": 113
+    },
+    "Fasted": {
+        "days_since_not_zero": 186,
+        "days_since_zero": 0,
+        "longest_streak": 6
+    },
+    "Filmed juggle": {
+        "days_since_not_zero": 67,
+        "days_since_zero": 0,
+        "longest_streak": 25
+    },
+    "Flossed": {
+        "days_since_not_zero": 52,
+        "days_since_zero": 0,
+        "longest_streak": 14
+    },
+    "Fresh air": {
+        "days_since_not_zero": 42,
+        "days_since_zero": 0,
+        "longest_streak": 132
+    },
+    "Fun juggle": {
+        "days_since_not_zero": 40,
+        "days_since_zero": 0,
+        "longest_streak": 175
+    },
+    "Good posture": {
+        "days_since_not_zero": 112,
+        "days_since_zero": 0,
+        "longest_streak": 14
+    },
+    "Grumpy blocker": {
+        "days_since_not_zero": 265,
+        "days_since_zero": 0,
+        "longest_streak": 2
+    },
+    "HIT": {
+        "days_since_not_zero": 53,
+        "days_since_zero": 0,
+        "longest_streak": 22
+    },
+    "Health learned": {
+        "days_since_not_zero": 60,
+        "days_since_zero": 0,
+        "longest_streak": 3
+    },
+    "Inspired juggle": {
+        "days_since_not_zero": 52,
+        "days_since_zero": 0,
+        "longest_streak": 3
+    },
+    "Janki used": {
+        "days_since_not_zero": 61,
+        "days_since_zero": 0,
+        "longest_streak": 22
+    },
+    "Juggle goal": {
+        "days_since_not_zero": 229,
+        "days_since_zero": 0,
+        "longest_streak": 91
+    },
+    "Juggling record broke": {
+        "days_since_not_zero": 53,
+        "days_since_zero": 0,
+        "longest_streak": 114
+    },
+    "Juggling tech sessions": {
+        "days_since_not_zero": 19,
+        "days_since_zero": 0,
+        "longest_streak": 6
+    },
+    "Kind stranger": {
+        "days_since_not_zero": 40,
+        "days_since_zero": 0,
+        "longest_streak": 24
+    },
+    "Language studied": {
+        "days_since_not_zero": 0,
+        "days_since_zero": 1,
+        "longest_streak": 235
+    },
+    "Launch Pushups Widget": {
+        "days_since_not_zero": 1,
+        "days_since_zero": 0,
+        "longest_streak": 150
+    },
+    "Launch Situps Widget": {
+        "days_since_not_zero": 52,
+        "days_since_zero": 0,
+        "longest_streak": 105
+    },
+    "Launch Squats Widget": {
+        "days_since_not_zero": 6,
+        "days_since_zero": 0,
+        "longest_streak": 110
+    },
+    "Lucidity trained": {
+        "days_since_not_zero": 53,
+        "days_since_zero": 0,
+        "longest_streak": 3
+    },
+    "Lung stretch": {
+        "days_since_not_zero": 77,
+        "days_since_zero": 0,
+        "longest_streak": 27
+    },
+    "Magic performed": {
+        "days_since_not_zero": 15,
+        "days_since_zero": 0,
+        "longest_streak": 3
+    },
+    "Magic practiced": {
+        "days_since_not_zero": 3,
+        "days_since_zero": 0,
+        "longest_streak": 33
+    },
+    "Meditations": {
+        "days_since_not_zero": 51,
+        "days_since_zero": 0,
+        "longest_streak": 110
+    },
+    "Memory practice": {
+        "days_since_not_zero": 6,
+        "days_since_zero": 0,
+        "longest_streak": 103
+    },
+    "Move juggle": {
+        "days_since_not_zero": 53,
+        "days_since_zero": 0,
+        "longest_streak": 2
+    },
+    "Music listen": {
+        "days_since_not_zero": 9,
+        "days_since_zero": 0,
+        "longest_streak": 140
+    },
+    "Podcast finished": {
+        "days_since_not_zero": 7,
+        "days_since_zero": 0,
+        "longest_streak": 172
+    },
+    "Programming sessions": {
+        "days_since_not_zero": 1,
+        "days_since_zero": 0,
+        "longest_streak": 114
+    },
+    "Question asked": {
+        "days_since_not_zero": 62,
+        "days_since_zero": 0,
+        "longest_streak": 6
+    },
+    "Read academic": {
+        "days_since_not_zero": 241,
+        "days_since_zero": 0,
+        "longest_streak": 1
+    },
+    "Sleep watch": {
+        "days_since_not_zero": 6,
+        "days_since_zero": 0,
+        "longest_streak": 132
+    },
+    "Some anki": {
+        "days_since_not_zero": 19,
+        "days_since_zero": 0,
+        "longest_streak": 233
+    },
+    "Song juggle": {
+        "days_since_not_zero": 57,
+        "days_since_zero": 0,
+        "longest_streak": 3
+    },
+    "Talk stranger": {
+        "days_since_not_zero": 40,
+        "days_since_zero": 0,
+        "longest_streak": 7
+    },
+    "Todos done": {
+        "days_since_not_zero": 4,
+        "days_since_zero": 0,
+        "longest_streak": 91
+    },
+    "Took pills": {
+        "days_since_not_zero": 11,
+        "days_since_zero": 0,
+        "longest_streak": 58
+    },
+    "UC post": {
+        "days_since_not_zero": 4,
+        "days_since_zero": 0,
+        "longest_streak": 275
+    },
+    "Unique juggle": {
+        "days_since_not_zero": 53,
+        "days_since_zero": 0,
+        "longest_streak": 36
+    },
+    "Unusual experience": {
+        "days_since_not_zero": 8,
+        "days_since_zero": 0,
+        "longest_streak": 184
+    },
+    "Watch juggle": {
+        "days_since_not_zero": 62,
+        "days_since_zero": 0,
+        "longest_streak": 2
+    },
+    "Writing sessions": {
+        "days_since_not_zero": 49,
+        "days_since_zero": 0,
+        "longest_streak": 126
+    }
+}

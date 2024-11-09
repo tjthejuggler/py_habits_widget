@@ -58,7 +58,10 @@ class IconFinder:
             'Watch juggle': 'magnifying_glass_ps',
             'Fresh air': 'tree_palm4',
             'Talk stranger': 'magnet',
-            'Balanced': 'letter_ii'
+            'Balanced': 'letter_ii',
+            'Fasted': 'eye6',
+            'Magic practiced': 'key11_sc48',
+            'Magic performed': 'lock6_sc48'
         }
 
         # Create a dictionary with the reverse mapping from icons to activities
