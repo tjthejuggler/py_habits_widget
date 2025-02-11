@@ -21,12 +21,32 @@ import threading
 
 NOTES_FILEPATH = '/home/twain/Projects/py_habits_widget/persistent_plotly_notes.txt'
 
+with open('/home/twain/Projects/py_habits_widget/obsidian_dir.txt', 'r') as f:
+    obsidian_dir = f.read().strip()
+
 def open_video(video_name):
     video_path = os.path.join("/home/twain/Projects/small_scripts/modified_videos", video_name)
     subprocess.run(["vlc", video_path])
     return "Opening " + video_name
 
+def make_json(directory):
+    directory = os.path.expanduser(directory)
+    with open(directory, 'r') as f:
+        my_json = json.load(f)
+    return my_json
+
 def generate_chart(chart_prompt):
+    # Load and merge both habitsdb files
+    habitsdb = make_json(obsidian_dir+'habitsdb.txt')
+    habitsdb_phone = make_json(obsidian_dir+'habitsdb_phone.txt')
+    habitsdb_to_add = make_json(obsidian_dir+'habitsdb_to_add.txt')
+    
+    # Merge habitsdb_phone into habitsdb
+    for habit, dates in habitsdb_phone.items():
+        if habit not in habitsdb:
+            habitsdb[habit] = {}
+        habitsdb[habit].update(dates)
+
     df = pd.read_csv('output.csv')
     with open('openai_api_key.txt', 'r') as file:
         api_key = file.read().strip()

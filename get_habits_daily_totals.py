@@ -27,6 +27,14 @@ def adjust_habit_count(count, habit_name):
             
 def output_habits_per_day():
     habitsdb = make_json(obsidian_dir+'habitsdb.txt')
+    habitsdb_phone = make_json(obsidian_dir+'habitsdb_phone.txt')
+    
+    # Merge habitsdb_phone into habitsdb
+    for habit, dates in habitsdb_phone.items():
+        if habit not in habitsdb:
+            habitsdb[habit] = {}
+        habitsdb[habit].update(dates)
+
     habitsdb_to_add = make_json(obsidian_dir+'habitsdb_to_add.txt')
 
     with open('habits_per_day.txt', 'w') as f:
@@ -37,13 +45,30 @@ def output_habits_per_day():
                 count = adjust_habit_count(count, habit_name)
                 f.write(f"{date_str}: {count}\n")
 
+# Load all database files
 habits = make_json(obsidian_dir+'habitsdb.txt')
+habitsdb_phone = make_json(obsidian_dir+'habitsdb_phone.txt')
+habitsdb_to_add = make_json(obsidian_dir+'habitsdb_to_add.txt')
+
+# Merge habitsdb_phone into habits
+for habit, dates in habitsdb_phone.items():
+    if habit not in habits:
+        habits[habit] = {}
+    habits[habit].update(dates)
 
 # Get a list of all the dates
 dates = sorted(set(date for habit in habits.values() for date in habit.keys()))
 
 # Count the number of habits done each day
-totals = [sum(adjust_habit_count(habit.get(date, 0), habit_name) for habit_name, habit in habits.items()) for date in dates]
+totals = []
+for date in dates:
+    daily_total = 0
+    for habit_name, habit in habits.items():
+        value = habit.get(date, 0)
+        if date == sorted(habit.keys())[-1]:  # If it's the latest date
+            value += habitsdb_to_add.get(habit_name, 0)  # Add pending value from habitsdb_to_add
+        daily_total += adjust_habit_count(value, habit_name)
+    totals.append(daily_total)
 
 #reverse the order of totals
 totals.reverse()

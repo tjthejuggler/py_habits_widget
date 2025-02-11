@@ -72,8 +72,16 @@ target_date_obj = datetime.strptime(target_date, date_format).date()
 with open('/home/twain/Projects/tail/obsidian_dir.txt', 'r') as f:
     obsidian_dir = f.read().strip()
 
+# Load and merge both habitsdb files
 habitsdb = make_json(obsidian_dir+'habitsdb.txt')
+habitsdb_phone = make_json(obsidian_dir+'habitsdb_phone.txt')
 habitsdb_to_add = make_json(obsidian_dir+'habitsdb_to_add.txt')
+
+# Merge habitsdb_phone into habitsdb
+for habit, dates in habitsdb_phone.items():
+    if habit not in habitsdb:
+        habitsdb[habit] = {}
+    habitsdb[habit].update(dates)
 
 #activities is the list of keys from habitsdb
 activities = list(habitsdb.keys())
@@ -1052,7 +1060,19 @@ def make_graph(daily_habits_count, list_of_habits, daily_net_streaks, daily_stre
     dash_thread = threaded_dash_app.DashApp(fig, ordered_streaks_per_date, ordered_antistreaks_per_date, dates, daily_streaks, daily_antistreaks, records)
     dash_thread.start()
     url = "http://127.0.0.1:8050"
-    webbrowser.get('firefox').open_new_tab(url)
+    try:
+        # First try default browser
+        webbrowser.open_new_tab(url)
+    except webbrowser.Error:
+        try:
+            # Try Firefox specifically
+            webbrowser.get('firefox').open_new_tab(url)
+        except webbrowser.Error:
+            try:
+                # Try Chrome
+                webbrowser.get('google-chrome').open_new_tab(url)
+            except webbrowser.Error:
+                print(f"Could not open browser. Please manually visit: {url}")
 
 def get_streak_numbers(show_graph, checked_activities):
     
