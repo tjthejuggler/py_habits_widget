@@ -48,7 +48,7 @@ class NumberedButton(QPushButton):
         self.upper_left_number = int(all_time_high_values["day"][1])
         self.right_number = right_number
         # Set the tooltip with HTML tags to make the text bigger
-        self.setToolTip(f'<nobr><font size="4">Current streak/antistreak: {self.left_number}<br>'
+        self.setToolTip(f'<nobr><font size="4">{args[0].activity}<br>Current streak/antistreak: {self.left_number}<br>'
                         f'Longest streak: {self.right_number}<br>'
                         f'(current) All time high - date:<br>'
                         f'day: ({current_values["day"]}) {all_time_high_values["day"][1]} - {all_time_high_values["day"][0]}<br>'
@@ -60,11 +60,16 @@ class NumberedButton(QPushButton):
     def paintEvent(self, event):
         super(NumberedButton, self).paintEvent(event)
         painter = QPainter(self)
-        painter.setFont(QFont("Arial", 12))
-        painter.drawText(4, 66, str(self.left_number))
-        painter.drawText(4, 16, str(self.upper_left_number))
-        right_number_length = len(str(self.right_number))
-        painter.drawText(72-(right_number_length*8), 66, str(self.right_number))
+        painter.setFont(QFont("Arial", 10))
+        # Calculate text width for right alignment
+        right_number_text = str(self.right_number)
+        metrics = painter.fontMetrics()
+        right_text_width = metrics.horizontalAdvance(right_number_text)
+        
+        # Position numbers with proper margins
+        painter.drawText(6, 130, str(self.left_number))  # Bottom left
+        painter.drawText(6, 24, str(self.upper_left_number))  # Top left, moved down more
+        painter.drawText(138 - right_text_width, 130, right_number_text)  # Bottom right, properly aligned
 
 class ClickableLabel(QLabel):
     def mousePressEvent(self, event):
@@ -204,13 +209,14 @@ class IconGrid(QWidget):
                         icon, arg, activity, left_number, current_values, all_time_high_values, right_number = icons_and_scripts[index]
                         button_with_checkbox = ButtonWithCheckbox(activity, left_number, current_values, all_time_high_values, right_number, self)
                         button_with_checkbox.button.setIcon(QIcon(icon))
-                        button_with_checkbox.button.setIconSize(QSize(64, 64))
+                        button_with_checkbox.button.setIconSize(QSize(144, 144))
+                        button_with_checkbox.button.setFixedSize(144, 144)  # Force the button size
                         button_with_checkbox.button.clicked.connect(lambda checked, a=arg: self.increment_habit(a))
                         button_with_checkbox.button.setFocusPolicy(Qt.NoFocus)
                         grid_layout.addWidget(button_with_checkbox, row, col)
                         self.button_with_checkboxes.append(button_with_checkbox)
                     else:
-                        spacer = QSpacerItem(64, 64, QSizePolicy.Fixed, QSizePolicy.Fixed)
+                        spacer = QSpacerItem(144, 144, QSizePolicy.Fixed, QSizePolicy.Fixed)
                         grid_layout.addItem(spacer, row, col)
                 index += 1
         self.setWindowTitle('Icon Grid')
