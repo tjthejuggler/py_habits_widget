@@ -83,7 +83,7 @@ class IconGrid(QWidget):
     def get_icons_and_scripts(self):
         
         activities = [ 
-            'Unique juggle', 'Juggling record broke', 'Dream acted', 'Sleep watch', 'Apnea walked', 'Cold Shower Widget', 'Programming sessions', 'Book read', 'Create juggle', 'Fun juggle', 'Drm Review',  'Early phone', 'Apnea practiced', 'Launch Squats Widget', 'Juggling tech sessions', 'Podcast finished', 'Song juggle', 'Janki used', 'Lucidity trained', 'Anki created', 'Apnea apb', 'Launch Situps Widget', 'Writing sessions', 'Educational video watched', 'Move juggle', 'Filmed juggle', 'Unusual experience', 'Anki mydis done', 'Apnea spb', 'Launch Pushups Widget', 'UC post', 'Article read', 'None', 'Watch juggle', 'Meditations', 'Some anki', 'Lung stretch', 'Cardio sessions', 'AI tool', 'Read academic', 'None', 'Inspired juggle', 'Kind stranger', 'Health learned', 'None', 'Good posture',  'Drew', 'Language studied', 'Magic practiced', 'Juggle goal', 'Broke record',  'Took pills', 'Fasted', 'HIT', 'Question asked', 'Music listen', 'Magic performed',  'Balanced', 'Grumpy blocker', 'Flossed', 'Todos done', 'Fresh air', 'Talk stranger', 'Memory practice'
+            'Unique juggle', 'Juggling record broke', 'Dream acted', 'Sleep watch', 'Apnea walked', 'Cold Shower Widget', 'Programming sessions', 'Book read', 'Create juggle', 'Fun juggle', 'Drm Review',  'Early phone', 'Apnea practiced', 'Launch Squats Widget', 'Juggling tech sessions', 'Podcast finished', 'Song juggle', 'Janki used', 'Lucidity trained', 'Anki created', 'Apnea apb', 'Launch Situps Widget', 'Writing sessions', 'Educational video watched', 'Move juggle', 'Filmed juggle', 'Unusual experience', 'Anki mydis done', 'Apnea spb', 'Launch Pushups Widget', 'UC post', 'Article read', 'None', 'Watch juggle', 'Meditations', 'Some anki', 'Lung stretch', 'Cardio sessions', 'AI tool', 'Read academic', 'None', 'Inspired juggle', 'Kind stranger', 'Health learned', 'Sweat', 'Good posture',  'Drew', 'Language studied', 'Magic practiced', 'Juggle goal', 'Broke record',  'Took pills', 'Fasted', 'HIT', 'Question asked', 'Music listen', 'Magic performed',  'Balanced', 'Grumpy blocker', 'Flossed', 'Todos done', 'Fresh air', 'Talk stranger', 'Memory practice'
             ]
 
         # Load both habitsdb files and merge them
@@ -134,6 +134,8 @@ class IconGrid(QWidget):
                     last_value = math.floor(last_value/50 + 0.5)
                 elif "Squats" in activities[i]:
                     last_value = math.floor(last_value/30 + 0.5)
+                elif "Sweat" in activities[i]:
+                    last_value = math.floor(last_value/15 + 0.5)
                 elif "Cold Shower" in activities[i]:
                     if last_value > 0 and last_value < 3:
                         last_value = 3
@@ -185,6 +187,14 @@ class IconGrid(QWidget):
 
         self.total_label = ClickableLabel()
         grid_layout.addWidget(self.total_label, 0, num_columns)
+        
+        # Add refresh button
+        refresh_button = QPushButton()
+        refresh_button.setIcon(QIcon.fromTheme('view-refresh'))
+        refresh_button.setFixedSize(24, 24)
+        refresh_button.clicked.connect(self.refresh_widget)
+        grid_layout.addWidget(refresh_button, 0, num_columns - 1)
+        
         self.update_total()
 
         for col in range(num_columns):
@@ -293,6 +303,18 @@ class IconGrid(QWidget):
             personal_records_dir = os.path.expanduser(personal_records_dir)
             with open(personal_records_dir, 'w') as f:
                 json.dump(personal_records, f, indent=4, sort_keys=True)
+
+    def refresh_widget(self):
+        # Get the current executable path
+        executable = sys.executable
+        args = sys.argv[:]
+        args.insert(0, sys.executable)
+        # Close current instance
+        self.close()
+        # Start new instance
+        subprocess.Popen(args)
+        # Exit current instance
+        sys.exit(0)
 
     def update_icons(self):
         print("Updating icons")

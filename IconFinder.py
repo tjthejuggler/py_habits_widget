@@ -61,7 +61,8 @@ class IconFinder:
             'Balanced': 'letter_ii',
             'Fasted': 'eye6',
             'Magic practiced': 'key11_sc48',
-            'Magic performed': 'lock6_sc48'
+            'Magic performed': 'lock6_sc48',
+            'Sweat': 'hourglass'
         }
 
         # Create a dictionary with the reverse mapping from icons to activities
