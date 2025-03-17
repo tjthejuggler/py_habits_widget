@@ -91,7 +91,7 @@ class IconGrid(QWidget):
             'Unique juggle', 'Juggling record broke', 'Dream acted', 'Sleep watch', 'Apnea walked', 'Cold Shower Widget', 'Programming sessions', 'Book read', 'Create juggle', 'Fun juggle', 'Drm Review',  'Early phone', 'Apnea practiced', 'Launch Squats Widget', 'Juggling tech sessions', 'Podcast finished', 'Song juggle', 'Janki used', 'Lucidity trained', 'Anki created', 'Apnea apb', 'Launch Situps Widget', 'Writing sessions', 'Educational video watched', 'Move juggle', 'Filmed juggle', 'Unusual experience', 'Anki mydis done', 'Apnea spb', 'Launch Pushups Widget', 'UC post', 'Article read', 'None', 'Watch juggle', 'Meditations', 'Some anki', 'Lung stretch', 'Cardio sessions', 'AI tool', 'Read academic', 'None', 'Inspired juggle', 'Kind stranger', 'Health learned', 'Sweat', 'Good posture',  'Drew', 'Language studied', 'Magic practiced', 'Juggle goal', 'Broke record',  'Took pills', 'Fasted', 'HIT', 'Question asked', 'Music listen', 'Magic performed',  'Balanced', 'Grumpy blocker', 'Flossed', 'Todos done', 'Fresh air', 'Talk stranger', 'Memory practice'
             ]
 
-        # Load both habitsdb files and merge them
+        # Load both habitsdb files and merge them for streak calculations
         habitsdb = make_json(obsidian_dir+'habitsdb.txt')
         habitsdb_phone = make_json(obsidian_dir+'habitsdb_phone.txt')
         
@@ -114,19 +114,32 @@ class IconGrid(QWidget):
                 days_since_zero = get_days_since_zero(inner_dict)
                 left_number = -days_since_not_zero
                 if days_since_not_zero < 2:
-                    days_since_zero = get_days_since_zero_minus(inner_dict) 
+                    days_since_zero = get_days_since_zero_minus(inner_dict)
                     left_number = days_since_zero
+                
                 current_values = {}
+                
+                # For day value, use the most recent entry from merged data
                 current_values["day"] = inner_dict[list(inner_dict.keys())[-1]]
-                current_values["week"] = get_average_of_last_n_days(inner_dict,7)
-                current_values["month"] = get_average_of_last_n_days(inner_dict,30)
-                current_values["year"] = get_average_of_last_n_days(inner_dict,365)
+                
+                # For week and month averages, use phone data if available
+                if activities[i] in habitsdb_phone:
+                    phone_inner_dict = habitsdb_phone[activities[i]]
+                    current_values["week"] = get_average_of_last_n_days(phone_inner_dict, 7)
+                    current_values["month"] = get_average_of_last_n_days(phone_inner_dict, 30)
+                else:
+                    # Fall back to merged data if not in phone data
+                    current_values["week"] = get_average_of_last_n_days(inner_dict, 7)
+                    current_values["month"] = get_average_of_last_n_days(inner_dict, 30)
+                
+                # For year average, use merged data
+                current_values["year"] = get_average_of_last_n_days(inner_dict, 365)
 
-                all_time_high_values={}        
-                all_time_high_values["day"] = get_all_time_high_rolling(inner_dict,1)
-                all_time_high_values["week"] = get_all_time_high_rolling(inner_dict,7)
-                all_time_high_values["month"] = get_all_time_high_rolling(inner_dict,30)
-                all_time_high_values["year"] = get_all_time_high_rolling(inner_dict,365)
+                all_time_high_values={}
+                all_time_high_values["day"] = get_all_time_high_rolling(inner_dict, 1)
+                all_time_high_values["week"] = get_all_time_high_rolling(inner_dict, 7)
+                all_time_high_values["month"] = get_all_time_high_rolling(inner_dict, 30)
+                all_time_high_values["year"] = get_all_time_high_rolling(inner_dict, 365)
                 right_number = longest_streak = get_longest_streak(inner_dict)
                 total_right_number += right_number
                 last_value_from_habitsdb = list(inner_dict.values())[-1]
@@ -311,15 +324,16 @@ class IconGrid(QWidget):
                 json.dump(personal_records, f, indent=4, sort_keys=True)
 
     def refresh_widget(self):
-        # Get the current executable path
-        executable = sys.executable
-        args = sys.argv[:]
-        args.insert(0, sys.executable)
-        # Close current instance
+        # Kill any existing instance of the startup script
+        subprocess.run(['pkill', '-f', 'habits_kde_theme_watchdog_phone.sh'])
+        
+        # Start a new instance of the startup script and exit this widget
+        # (the startup script will handle restarting the widget)
+        startup_script = '/home/twain/Projects/tail/habits_kde_theme_watchdog_phone.sh'
+        subprocess.Popen(['bash', startup_script])
+        
+        # Exit current widget instance
         self.close()
-        # Start new instance
-        subprocess.Popen(args)
-        # Exit current instance
         sys.exit(0)
 
     def update_icons(self):
@@ -335,13 +349,43 @@ class IconGrid(QWidget):
 
     def update_total(self):
         icons_and_scripts = self.get_icons_and_scripts()
-        today_total, last_7_days_total, last_30_days_total = 0, 0, 0
+        today_total = 0
 
+        # Read the total_habits.txt2 file to get the daily totals
+        try:
+            with open('/home/twain/noteVault/habitCounters/total_habits.txt2', 'r') as f:
+                totals_str = f.read().strip()
+                totals = [int(x) for x in totals_str.split(',')]
+                
+                # Calculate week and month averages from the totals file
+                week_totals = totals[:7]  # First 7 values are the most recent
+                month_totals = totals[:30]  # First 30 values are the most recent
+                
+                # Calculate the averages
+                week_avg = sum(week_totals) / len(week_totals)
+                month_avg = sum(month_totals) / len(month_totals)
+                
+                # Print debug information
+                print(f"Week totals from file: {week_totals}")
+                print(f"Week average from file: {week_avg:.2f}")
+                print(f"Month totals from file: {month_totals[:7]}")  # Just show first 7 for brevity
+                print(f"Month average from file: {month_avg:.2f}")
+        except (FileNotFoundError, ValueError) as e:
+            print(f"Error reading total_habits.txt2: {e}")
+            # Fallback to old method if file can't be read
+            week_avg = 0
+            month_avg = 0
+            
+            # Initialize for fallback calculation
+            last_7_days_total, last_30_days_total = 0, 0
+            days_counted_week, days_counted_month = 0, 0
+
+        # Still calculate today_total from the activities
         for item in icons_and_scripts:
             if item is not None:
                 icon, arg, activity, left_number, current_values, all_time_high_values, right_number = item
                 
-                # Load and merge both habitsdb files
+                # For today's total, we need both habitsdb files and habitsdb_to_add
                 habitsdb = make_json(obsidian_dir+'habitsdb.txt')
                 habitsdb_phone = make_json(obsidian_dir+'habitsdb_phone.txt')
                 
@@ -350,53 +394,68 @@ class IconGrid(QWidget):
                     if arg not in habitsdb:
                         habitsdb[arg] = {}
                     habitsdb[arg].update(habitsdb_phone[arg])
-
+                
                 habitsdb_to_add = make_json(obsidian_dir+'habitsdb_to_add.txt')
-
-                inner_dict = habitsdb[arg]
-                sorted_dates = sorted(inner_dict.keys(), reverse=True)
-                current_habit_today = inner_dict[sorted_dates[0]] + habitsdb_to_add[arg]
-
-                # def adjust_habit_count(count, habit_name):
-                #     if "Pushups" in habit_name:
-                #         return math.floor(count / 30 + 0.5)
-                #     elif "Situps" in habit_name:
-                #         return math.floor(count / 50 + 0.5)
-                #     elif "Squats" in habit_name:
-                #         return math.floor(count / 30 + 0.5)
-                #     elif "Cold Shower" in habit_name:
-                #         if count > 0 and count < 3:
-                #             count = 3
-                #         return math.floor(count / 3 + 0.5)
-                #     else:
-                #         return count
-
-                today_total += habit_helper.adjust_habit_count(current_habit_today, arg)
-
-                last_7_days_count = 0
-                for date_str in sorted_dates[:7]:
-                    last_7_days_count += habit_helper.adjust_habit_count(inner_dict[date_str], arg)
-                last_7_days_total += last_7_days_count
-
-                last_30_days_count = 0
-                for date_str in sorted_dates[:30]:
-                    last_30_days_count += habit_helper.adjust_habit_count(inner_dict[date_str], arg)
-                last_30_days_total += last_30_days_count
-
+                
+                if arg in habitsdb:
+                    inner_dict = habitsdb[arg]
+                    sorted_dates = sorted(inner_dict.keys(), reverse=True)
+                    if sorted_dates:
+                        current_habit_today = inner_dict[sorted_dates[0]] + habitsdb_to_add[arg]
+                        today_total += habit_helper.adjust_habit_count(current_habit_today, arg)
+                
+                # Only calculate these if we're using the fallback method
+                if week_avg == 0 and month_avg == 0:
+                    # Use only phone data for recent calculations
+                    if arg in habitsdb_phone:
+                        inner_dict = habitsdb_phone[arg]
+                        sorted_dates = sorted(inner_dict.keys(), reverse=True)
+                        
+                        # Use a time-based approach for week and month calculations
+                        current_date = datetime.datetime.now().date()
+                        seven_days_ago = current_date - datetime.timedelta(days=7)
+                        thirty_days_ago = current_date - datetime.timedelta(days=30)
+                        
+                        # Calculate last 7 days total
+                        last_7_days_count = 0
+                        activity_days_week = set()
+                        for date_str in sorted_dates:
+                            date_obj = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
+                            if date_obj >= seven_days_ago and date_obj <= current_date:
+                                last_7_days_count += habit_helper.adjust_habit_count(inner_dict[date_str], arg)
+                                activity_days_week.add(date_str)
+                        last_7_days_total += last_7_days_count
+                        days_counted_week = max(days_counted_week, len(activity_days_week))
+                        
+                        # Calculate last 30 days total
+                        last_30_days_count = 0
+                        activity_days_month = set()
+                        for date_str in sorted_dates:
+                            date_obj = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
+                            if date_obj >= thirty_days_ago and date_obj <= current_date:
+                                last_30_days_count += habit_helper.adjust_habit_count(inner_dict[date_str], arg)
+                                activity_days_month.add(date_str)
+                        last_30_days_total += last_30_days_count
+                        days_counted_month = max(days_counted_month, len(activity_days_month))
         current_date_streak, current_date_antistreak, longest_streak_record, longest_antistreak_record, highest_net_streak_record, lowest_net_streak_record, week_average, month_average, year_average, overall_average = get_streak_numbers(False, [])
 
         net_streak = current_date_streak - current_date_antistreak
         streak_text = f"{net_streak}:{lowest_net_streak_record}:{highest_net_streak_record}\ns {current_date_streak}:{longest_streak_record}\nas {current_date_antistreak}:{longest_antistreak_record}\n"
-        self.total_label.setText(f"{streak_text}{today_total}|{last_7_days_total / 7:.1f}|{last_30_days_total / 30:.1f}\n{week_average[-1]:.1f}|{month_average[-1]:.1f}|{year_average[-1]:.1f}|{overall_average[-1]:.1f}")
+        # If we're using the fallback method, calculate the averages
+        if 'week_avg' not in locals() or week_avg == 0:
+            # Calculate averages using actual days counted or default to 7/30 if no days counted
+            # This ensures we don't artificially inflate averages when data is sparse
+            week_avg = last_7_days_total / min(max(days_counted_week, 1), 7)
+            month_avg = last_30_days_total / min(max(days_counted_month, 1), 30)
+        
+        self.total_label.setText(f"{streak_text}{today_total}|{week_avg:.1f}|{month_avg:.1f}\n{week_average[-1]:.1f}|{month_average[-1]:.1f}|{year_average[-1]:.1f}|{overall_average[-1]:.1f}")
 
         #write a json file that has net streak, current streak, longest streak, current antistreak, longest antistreak
         streaks_dir = os.path.expanduser(obsidian_dir+'/tail/streaks.txt')
-        last_7_days_average = last_7_days_total / 7
-        # last_7_days_average rounded to one decimal place
-        last_7_days_average = math.floor(last_7_days_average * 10 + 0.5) / 10
-        last_30_days_average = last_30_days_total / 30
-        # last_30_days_average rounded to one decimal place
-        last_30_days_average = math.floor(last_30_days_average * 10 + 0.5) / 10
+        
+        # Round the week and month averages to one decimal place
+        last_7_days_average = math.floor(week_avg * 10 + 0.5) / 10
+        last_30_days_average = math.floor(month_avg * 10 + 0.5) / 10
         with open(streaks_dir, 'w') as f:
             json.dump({"net_streak": net_streak, "highest_net_streak_record":highest_net_streak_record,"lowest_net_streak_record":lowest_net_streak_record,"current_streak": current_date_streak, "longest_streak": longest_streak_record, "current_antistreak": current_date_antistreak, "longest_antistreak": longest_antistreak_record,"today_total":today_total,"last_7_days_average":last_7_days_average,"last_30_days_average":last_30_days_average, "week_average":int(week_average[-1]), "month_average":int(month_average[-1]), "year_average":int(year_average[-1]),"overall_average":int(overall_average[-1]) }, f, indent=4, sort_keys=True)
             

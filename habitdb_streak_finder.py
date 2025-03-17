@@ -131,19 +131,7 @@ for i in range(len(activities)):
 #         current_date += timedelta(days=1)
 
 #     return longest_streak_record, longest_antistreak_record, current_date_streak, current_date_antistreak
-def adjust_habit_count(count, habit_name):
-    if "Pushups" in habit_name:
-        return math.floor(count / 30 + 0.5)
-    elif "Situps" in habit_name:
-        return math.floor(count / 50 + 0.5)
-    elif "Squats" in habit_name:
-        return math.floor(count / 30 + 0.5)
-    elif "Cold Shower" in habit_name:
-        if count > 0 and count < 3:
-            count = 3
-        return math.floor(count / 3 + 0.5)
-    else:
-        return count
+# Removed duplicate function - using the one from habit_helper.py instead
 
 def get_best_streak_custom_date(inner_dict, target_date):
     best_streak = 0
@@ -397,7 +385,7 @@ def find_longest_streaks_and_antistreaks(start_date, end_date, activities, habit
         total_days_since_not_zero = 0
         total_days_since_zero = 0
         # Calculate total points and count habits for the day
-        # total_points = sum(adjust_habit_count(inner_dict.get(str(current_date), 0), habit) for habit, inner_dict in habitsdb.items())
+        # total_points = sum(habit_helper.adjust_habit_count(inner_dict.get(str(current_date), 0), habit) for habit, inner_dict in habitsdb.items())
         habits_count = sum(str(current_date) in inner_dict for _, inner_dict in habitsdb.items())
         daily_habits_count.append(habits_count)
         # List of habits for the day
@@ -484,7 +472,7 @@ def find_longest_streaks_and_antistreaks(start_date, end_date, activities, habit
 
         # Calculate total points for the day
         #total_points = sum(inner_dict.get(str(current_date), 0) for inner_dict in habitsdb.values())
-        total_points = sum(adjust_habit_count(inner_dict.get(str(current_date), 0), habit) for habit, inner_dict in habitsdb.items())
+        total_points = sum(habit_helper.adjust_habit_count(inner_dict.get(str(current_date), 0), habit) for habit, inner_dict in habitsdb.items())
 
         # Assuming total_points and unique_habits_count are calculated for the current_date
 

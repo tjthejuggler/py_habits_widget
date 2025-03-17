@@ -7,6 +7,8 @@ def adjust_habit_count(count, habit_name):
         return math.floor(count / 50 + 0.5)
     elif "Squats" in habit_name:
         return math.floor(count / 30 + 0.5)
+    elif "Sweat" in habit_name:
+        return math.floor(count / 15 + 0.5)
     elif "Cold Shower" in habit_name:
         if count > 0 and count < 3:
             count = 3
