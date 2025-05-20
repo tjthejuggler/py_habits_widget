@@ -4,3 +4,4 @@ output.csv
 *.csv
 /bar_chart_race_videos
 *.mp4
+/py_habits_widget

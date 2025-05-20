@@ -62,7 +62,11 @@ class IconFinder:
             'Fasted': 'eye6',
             'Magic practiced': 'key11_sc48',
             'Magic performed': 'lock6_sc48',
-            'Sweat': 'hourglass'
+            'Sweat': 'hourglass',
+            'Free': 'foot_left_ps',
+            "Juggle run": 'robot',
+            "Juggle lights": 'flower17',
+            "Joggle": 'police_car',
         }
 
         # Create a dictionary with the reverse mapping from icons to activities

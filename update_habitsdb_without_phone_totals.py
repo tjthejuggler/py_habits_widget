@@ -76,7 +76,7 @@ try:
 
     # Write the stats to habitsdb_without_phone_totals.txt
     print("Writing results to habitsdb_without_phone_totals.txt...")
-    with open('habitsdb_without_phone_totals.txt', 'w') as f:
+    with open('/home/twain/noteVault/habitsdb_without_phone_totals.txt', 'w') as f:
         json.dump(stats, f, indent=4)
     print("Done!")
 

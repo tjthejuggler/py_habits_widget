@@ -88,7 +88,7 @@ class IconGrid(QWidget):
     def get_icons_and_scripts(self):
         
         activities = [ 
-            'Unique juggle', 'Juggling record broke', 'Dream acted', 'Sleep watch', 'Apnea walked', 'Cold Shower Widget', 'Programming sessions', 'Book read', 'Create juggle', 'Fun juggle', 'Drm Review',  'Early phone', 'Apnea practiced', 'Launch Squats Widget', 'Juggling tech sessions', 'Podcast finished', 'Song juggle', 'Janki used', 'Lucidity trained', 'Anki created', 'Apnea apb', 'Launch Situps Widget', 'Writing sessions', 'Educational video watched', 'Move juggle', 'Filmed juggle', 'Unusual experience', 'Anki mydis done', 'Apnea spb', 'Launch Pushups Widget', 'UC post', 'Article read', 'None', 'Watch juggle', 'Meditations', 'Some anki', 'Lung stretch', 'Cardio sessions', 'AI tool', 'Read academic', 'None', 'Inspired juggle', 'Kind stranger', 'Health learned', 'Sweat', 'Good posture',  'Drew', 'Language studied', 'Magic practiced', 'Juggle goal', 'Broke record',  'Took pills', 'Fasted', 'HIT', 'Question asked', 'Music listen', 'Magic performed',  'Balanced', 'Grumpy blocker', 'Flossed', 'Todos done', 'Fresh air', 'Talk stranger', 'Memory practice'
+            'Juggle lights', 'Unique juggle', 'Juggling record broke', 'Dream acted', 'Sleep watch', 'Apnea walked', 'Cold Shower Widget', 'Programming sessions', 'Book read', 'Joggle', 'Create juggle', 'Fun juggle', 'Drm Review',  'Early phone', 'Apnea practiced', 'Launch Squats Widget', 'Juggling tech sessions', 'Podcast finished', 'None', 'Song juggle', 'Janki used', 'Lucidity trained', 'Anki created', 'Apnea apb', 'Launch Situps Widget', 'Writing sessions', 'Educational video watched', 'None', 'Move juggle', 'Filmed juggle', 'Unusual experience', 'Anki mydis done', 'Apnea spb', 'Launch Pushups Widget', 'UC post', 'Article read', 'None', 'Juggle run', 'Watch juggle', 'Meditations', 'Some anki', 'Lung stretch', 'Cardio sessions', 'AI tool', 'Read academic', 'None', 'Free', 'Inspired juggle', 'Kind stranger', 'Health learned', 'Sweat', 'Good posture',  'Drew', 'Language studied', 'None', 'Magic practiced', 'Juggle goal', 'Broke record',  'Took pills', 'Fasted', 'HIT', 'Question asked', 'Music listen', 'None', 'Magic performed',  'Balanced', 'Grumpy blocker', 'Flossed', 'Todos done', 'Fresh air', 'Talk stranger', 'Memory practice'
             ]
 
         # Load both habitsdb files and merge them for streak calculations
@@ -200,7 +200,7 @@ class IconGrid(QWidget):
         grid_layout = QGridLayout()
         self.setLayout(grid_layout)
         icons_and_scripts = self.get_icons_and_scripts()
-        num_columns, num_rows, index = 8, 8, 0
+        num_columns, num_rows, index = 8, 9, 0
         #self.button_with_checkboxes = []
 
         self.total_label = ClickableLabel()
@@ -212,6 +212,14 @@ class IconGrid(QWidget):
         refresh_button.setFixedSize(24, 24)
         refresh_button.clicked.connect(self.refresh_widget)
         grid_layout.addWidget(refresh_button, 0, num_columns - 1)
+        
+        # Add wallpaper control panel button
+        wallpaper_button = QPushButton()
+        wallpaper_button.setIcon(QIcon.fromTheme('preferences-desktop-wallpaper'))
+        wallpaper_button.setFixedSize(24, 24)
+        wallpaper_button.setToolTip('Open Wallpaper Color Manager')
+        wallpaper_button.clicked.connect(self.open_wallpaper_control_panel)
+        grid_layout.addWidget(wallpaper_button, 0, num_columns - 2)
         
         self.update_total()
 
@@ -335,6 +343,13 @@ class IconGrid(QWidget):
         # Exit current widget instance
         self.close()
         sys.exit(0)
+        
+    def open_wallpaper_control_panel(self):
+        # Path to the wallpaper control panel program
+        wallpaper_control_panel = '/home/twain/Projects/tail/wallpaper_color_manager_new/color_control_panel.py'
+        
+        # Run the wallpaper control panel program in a separate process
+        subprocess.Popen(['python3', wallpaper_control_panel])
 
     def update_icons(self):
         print("Updating icons")
@@ -489,6 +504,9 @@ if __name__ == '__main__':
 
     # Set the application icon
     app.setWindowIcon(QIcon(icon_path))  # Replace with your icon file path
+
+    # Run the update_habitsdb_without_phone_totals.py script when the app opens
+    subprocess.run(['python3', '/home/twain/Projects/py_habits_widget/update_habitsdb_without_phone_totals.py'])
 
     icon_grid = IconGrid()
 
