@@ -240,7 +240,12 @@ class IconGrid(QWidget):
                         spacer = QSpacerItem(72, 72, QSizePolicy.Fixed, QSizePolicy.Fixed)
                         grid_layout.addItem(spacer, row, col)
                 index += 1
-        self.setWindowTitle('Icon Grid')
+        self.setWindowTitle('Habit Tracker Widget')
+        
+        # Set the window icon explicitly
+        icon_path = '/home/twain/Projects/py_habits_widget/icons/blue_icon.png'
+        self.setWindowIcon(QIcon(icon_path))
+        
         self.show()
 
     def increment_habit(self, argument):
@@ -496,18 +501,27 @@ def get_icon_image_based_on_theme(current_theme):
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
+    
+    # Set application name for better window manager recognition
+    app.setApplicationName("py_habits_widget")
+    app.setApplicationDisplayName("Habit Tracker Widget")
+    app.setDesktopFileName("py_habits_widget.desktop")
 
-    with open('/home/twain/Projects/tail/kde_theme.txt', 'r') as f:
-        current_theme = f.read().strip()
-
-    icon_path = get_icon_image_based_on_theme(current_theme)
-
-    # Set the application icon
-    app.setWindowIcon(QIcon(icon_path))  # Replace with your icon file path
+    # Set the application icon to blue_icon.png
+    icon_path = '/home/twain/Projects/py_habits_widget/icons/blue_icon.png'
+    app_icon = QIcon(icon_path)
+    app.setWindowIcon(app_icon)
 
     # Run the update_habitsdb_without_phone_totals.py script when the app opens
     subprocess.run(['python3', '/home/twain/Projects/py_habits_widget/update_habitsdb_without_phone_totals.py'])
 
     icon_grid = IconGrid()
+    # Set the icon on the main window as well
+    icon_grid.setWindowIcon(app_icon)
+    # Set a proper window title
+    icon_grid.setWindowTitle('Habit Tracker Widget')
+    
+    # Set window class name for X11
+    icon_grid.setProperty("WM_CLASS", "py_habits_widget")
 
     sys.exit(app.exec_())
