@@ -23,7 +23,7 @@ class ButtonWithCheckbox(QWidget):
         self.activity = activity
         self.button = NumberedButton(left_number, current_values, all_time_high_values, right_number, self)
         self.checkbox = QCheckBox(self)
-        self.checkbox.setFixedSize(20,20)  # Adjust the size of the checkbox as needed
+        self.checkbox.setFixedSize(10,10)  # Adjust the size of the checkbox as needed
 
         # Create a grid layout
         self.layout = QGridLayout(self)
@@ -60,16 +60,16 @@ class NumberedButton(QPushButton):
     def paintEvent(self, event):
         super(NumberedButton, self).paintEvent(event)
         painter = QPainter(self)
-        painter.setFont(QFont("Arial", 10))
+        painter.setFont(QFont("Arial", 8))
         # Calculate text width for right alignment
         right_number_text = str(self.right_number)
         metrics = painter.fontMetrics()
         right_text_width = metrics.horizontalAdvance(right_number_text)
         
-        # Position numbers with proper margins
-        painter.drawText(6, 130, str(self.left_number))  # Bottom left
-        painter.drawText(6, 24, str(self.upper_left_number))  # Top left, moved down more
-        painter.drawText(138 - right_text_width, 130, right_number_text)  # Bottom right, properly aligned
+        # Position numbers with proper margins - adjusted for 72x72 button size
+        painter.drawText(2, 68, str(self.left_number))  # Bottom left
+        painter.drawText(2, 15, str(self.upper_left_number))  # Top left
+        painter.drawText(68 - right_text_width, 68, right_number_text)  # Bottom right, properly aligned
 
 class ClickableLabel(QLabel):
     def mousePressEvent(self, event):
@@ -209,14 +209,14 @@ class IconGrid(QWidget):
         # Add refresh button
         refresh_button = QPushButton()
         refresh_button.setIcon(QIcon.fromTheme('view-refresh'))
-        refresh_button.setFixedSize(24, 24)
+        refresh_button.setFixedSize(12, 12)
         refresh_button.clicked.connect(self.refresh_widget)
         grid_layout.addWidget(refresh_button, 0, num_columns - 1)
         
         # Add wallpaper control panel button
         wallpaper_button = QPushButton()
         wallpaper_button.setIcon(QIcon.fromTheme('preferences-desktop-wallpaper'))
-        wallpaper_button.setFixedSize(24, 24)
+        wallpaper_button.setFixedSize(12, 12)
         wallpaper_button.setToolTip('Open Wallpaper Color Manager')
         wallpaper_button.clicked.connect(self.open_wallpaper_control_panel)
         grid_layout.addWidget(wallpaper_button, 0, num_columns - 2)
@@ -230,14 +230,14 @@ class IconGrid(QWidget):
                         icon, arg, activity, left_number, current_values, all_time_high_values, right_number = icons_and_scripts[index]
                         button_with_checkbox = ButtonWithCheckbox(activity, left_number, current_values, all_time_high_values, right_number, self)
                         button_with_checkbox.button.setIcon(QIcon(icon))
-                        button_with_checkbox.button.setIconSize(QSize(144, 144))
-                        button_with_checkbox.button.setFixedSize(144, 144)  # Force the button size
+                        button_with_checkbox.button.setIconSize(QSize(72, 72))
+                        button_with_checkbox.button.setFixedSize(72, 72)  # Force the button size
                         button_with_checkbox.button.clicked.connect(lambda checked, a=arg: self.increment_habit(a))
                         button_with_checkbox.button.setFocusPolicy(Qt.NoFocus)
                         grid_layout.addWidget(button_with_checkbox, row, col)
                         self.button_with_checkboxes.append(button_with_checkbox)
                     else:
-                        spacer = QSpacerItem(144, 144, QSizePolicy.Fixed, QSizePolicy.Fixed)
+                        spacer = QSpacerItem(72, 72, QSizePolicy.Fixed, QSizePolicy.Fixed)
                         grid_layout.addItem(spacer, row, col)
                 index += 1
         self.setWindowTitle('Icon Grid')
