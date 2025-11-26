@@ -386,10 +386,10 @@ def find_longest_streaks_and_antistreaks(start_date, end_date, activities, habit
         total_days_since_zero = 0
         # Calculate total points and count habits for the day
         # total_points = sum(habit_helper.adjust_habit_count(inner_dict.get(str(current_date), 0), habit) for habit, inner_dict in habitsdb.items())
-        habits_count = sum(str(current_date) in inner_dict for _, inner_dict in habitsdb.items())
+        habits_count = sum(current_date_str in inner_dict for _, inner_dict in habitsdb.items())
         daily_habits_count.append(habits_count)
         # List of habits for the day
-        list_of_habits[current_date_str] = [habit for habit, inner_dict in habitsdb.items() if str(current_date) in inner_dict]
+        list_of_habits[current_date_str] = [habit for habit, inner_dict in habitsdb.items() if current_date_str in inner_dict]
         #print(f'list of habits {current_date_str}', list_of_habits[current_date_str])
         # Initialize streak and antistreak dictionaries
         current_all_time_best_streaks = {activity: 0 for activity in activities}
