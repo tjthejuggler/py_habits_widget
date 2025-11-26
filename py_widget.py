@@ -23,7 +23,7 @@ class ButtonWithCheckbox(QWidget):
         self.activity = activity
         self.button = NumberedButton(left_number, current_values, all_time_high_values, right_number, self)
         self.checkbox = QCheckBox(self)
-        self.checkbox.setFixedSize(10,10)  # Adjust the size of the checkbox as needed
+        self.checkbox.setFixedSize(24,24)  # Adjust the size of the checkbox as needed
 
         # Create a grid layout
         self.layout = QGridLayout(self)
@@ -60,16 +60,16 @@ class NumberedButton(QPushButton):
     def paintEvent(self, event):
         super(NumberedButton, self).paintEvent(event)
         painter = QPainter(self)
-        painter.setFont(QFont("Arial", 8))
+        painter.setFont(QFont("Arial", 10))
         # Calculate text width for right alignment
         right_number_text = str(self.right_number)
         metrics = painter.fontMetrics()
         right_text_width = metrics.horizontalAdvance(right_number_text)
         
-        # Position numbers with proper margins - adjusted for 72x72 button size
-        painter.drawText(2, 68, str(self.left_number))  # Bottom left
-        painter.drawText(2, 15, str(self.upper_left_number))  # Top left
-        painter.drawText(68 - right_text_width, 68, right_number_text)  # Bottom right, properly aligned
+        # Position numbers with proper margins - adjusted for 100x100 button size
+        painter.drawText(3, 95, str(self.left_number))  # Bottom left
+        painter.drawText(3, 18, str(self.upper_left_number))  # Top left
+        painter.drawText(95 - right_text_width, 95, right_number_text)  # Bottom right, properly aligned
 
 class ClickableLabel(QLabel):
     def mousePressEvent(self, event):
@@ -85,10 +85,10 @@ class IconGrid(QWidget):
         self.button_with_checkboxes = []
         self.init_ui()
 
-    def get_icons_and_scripts(self):
+    def get_icons_and_scripts(self):   
         
         activities = [ 
-            'Juggle lights', 'Unique juggle', 'Juggling record broke', 'Dream acted', 'Sleep watch', 'Apnea walked', 'Cold Shower Widget', 'Programming sessions', 'Book read', 'Joggle', 'Create juggle', 'Fun juggle', 'Drm Review',  'Early phone', 'Apnea practiced', 'Launch Squats Widget', 'Juggling tech sessions', 'Podcast finished', 'None', 'Song juggle', 'Janki used', 'Lucidity trained', 'Anki created', 'Apnea apb', 'Launch Situps Widget', 'Writing sessions', 'Educational video watched', 'None', 'Move juggle', 'Filmed juggle', 'Unusual experience', 'Anki mydis done', 'Apnea spb', 'Launch Pushups Widget', 'UC post', 'Article read', 'None', 'Juggle run', 'Watch juggle', 'Meditations', 'Some anki', 'Lung stretch', 'Cardio sessions', 'AI tool', 'Read academic', 'None', 'Free', 'Inspired juggle', 'Kind stranger', 'Health learned', 'Sweat', 'Good posture',  'Drew', 'Language studied', 'None', 'Magic practiced', 'Juggle goal', 'Broke record',  'Took pills', 'Fasted', 'HIT', 'Question asked', 'Music listen', 'None', 'Magic performed',  'Balanced', 'Grumpy blocker', 'Flossed', 'Todos done', 'Fresh air', 'Talk stranger', 'Memory practice'
+            'Juggle lights', 'Unique juggle', 'Juggling record broke', 'Dream acted', 'Sleep watch', 'Apnea walked', 'Cold Shower Widget', 'Programming sessions', 'Book read', 'Fiction Book Intake', 'Joggle', 'Create juggle', 'Fun juggle', 'Drm Review',  'Early phone', 'Apnea practiced', 'Launch Squats Widget', 'Juggling tech sessions', 'Podcast finished', 'Fiction Video Intake', 'Blind juggle', 'Song juggle', 'Janki used', 'Lucidity trained', 'Anki created', 'Apnea apb', 'Launch Situps Widget', 'Writing sessions', 'Educational video watched', 'Chess', 'Juggling Balls Carry', 'Move juggle', 'Filmed juggle', 'Unusual experience', 'Anki mydis done', 'Apnea spb', 'Launch Pushups Widget', 'UC post', 'Article read', 'Rabbit Hole', 'Juggling Others Learn', 'Juggle run', 'Watch juggle', 'Meditations', 'Some anki', 'Lung stretch', 'Cardio sessions', 'AI tool', 'Read academic', 'Speak AI', 'Most Collisions', 'Free', 'Inspired juggle', 'Kind stranger', 'Health learned', 'Sweat', 'Good posture',  'Drew', 'Language studied', 'Communication Improved', 'No Coffee', 'Magic practiced', 'Juggle goal', 'Broke record',  'Took pills', 'Fasted', 'HIT', 'Question asked', 'Music listen', 'Unusually Kind', 'Tracked Sleep', 'Magic performed',  'Balanced', 'Grumpy blocker', 'Flossed', 'Todos done', 'Fresh air', 'Talk stranger', 'Memory practice'
             ]
 
         # Load both habitsdb files and merge them for streak calculations
@@ -200,7 +200,7 @@ class IconGrid(QWidget):
         grid_layout = QGridLayout()
         self.setLayout(grid_layout)
         icons_and_scripts = self.get_icons_and_scripts()
-        num_columns, num_rows, index = 8, 9, 0
+        num_columns, num_rows, index = 8, 10, 0
         #self.button_with_checkboxes = []
 
         self.total_label = ClickableLabel()
@@ -209,14 +209,14 @@ class IconGrid(QWidget):
         # Add refresh button
         refresh_button = QPushButton()
         refresh_button.setIcon(QIcon.fromTheme('view-refresh'))
-        refresh_button.setFixedSize(12, 12)
+        refresh_button.setFixedSize(32, 32)
         refresh_button.clicked.connect(self.refresh_widget)
         grid_layout.addWidget(refresh_button, 0, num_columns - 1)
         
         # Add wallpaper control panel button
         wallpaper_button = QPushButton()
         wallpaper_button.setIcon(QIcon.fromTheme('preferences-desktop-wallpaper'))
-        wallpaper_button.setFixedSize(12, 12)
+        wallpaper_button.setFixedSize(32, 32)
         wallpaper_button.setToolTip('Open Wallpaper Color Manager')
         wallpaper_button.clicked.connect(self.open_wallpaper_control_panel)
         grid_layout.addWidget(wallpaper_button, 0, num_columns - 2)
@@ -230,14 +230,14 @@ class IconGrid(QWidget):
                         icon, arg, activity, left_number, current_values, all_time_high_values, right_number = icons_and_scripts[index]
                         button_with_checkbox = ButtonWithCheckbox(activity, left_number, current_values, all_time_high_values, right_number, self)
                         button_with_checkbox.button.setIcon(QIcon(icon))
-                        button_with_checkbox.button.setIconSize(QSize(72, 72))
-                        button_with_checkbox.button.setFixedSize(72, 72)  # Force the button size
+                        button_with_checkbox.button.setIconSize(QSize(100, 100))
+                        button_with_checkbox.button.setFixedSize(100, 100)  # Force the button size
                         button_with_checkbox.button.clicked.connect(lambda checked, a=arg: self.increment_habit(a))
                         button_with_checkbox.button.setFocusPolicy(Qt.NoFocus)
                         grid_layout.addWidget(button_with_checkbox, row, col)
                         self.button_with_checkboxes.append(button_with_checkbox)
                     else:
-                        spacer = QSpacerItem(72, 72, QSizePolicy.Fixed, QSizePolicy.Fixed)
+                        spacer = QSpacerItem(100, 100, QSizePolicy.Fixed, QSizePolicy.Fixed)
                         grid_layout.addItem(spacer, row, col)
                 index += 1
         self.setWindowTitle('Habit Tracker Widget')

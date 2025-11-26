@@ -437,4 +437,4 @@ class DashApp(threading.Thread):
             return figure
 
 
-        app.run_server(debug=False)  # Set debug to False
+        app.run(debug=False)  # Set debug to False

@@ -67,7 +67,22 @@ class IconFinder:
             "Juggle run": 'robot',
             "Juggle lights": 'flower17',
             "Joggle": 'police_car',
+            "Blind juggle": 'moon',
+            "Juggling Balls Carry": 'copyright',
+            "Juggling Others Learn": 'www_search_ps',
+            "No Coffee": 'gas_none_sc49',
+            "Tracked Sleep": 'helicopter4',
+            "Rabbit Hole": 'chest',
+            "Speak AI": 'loud_speaker',
+            "Fiction Book Intake": 'document4',
+            "Fiction Video Intake": 'a_media22_arrow_forward1',
+            "Communication Improved": 'text_size',
+            "Unusually Kind": 'thumbs_up1',
+            "Most Collisions": 'compass2',
+            "Chess": 'key_hole_sc48'
         }
+
+
 
         # Create a dictionary with the reverse mapping from icons to activities
         self.icon_to_activity = {icon: activity for activity, icon in self.activity_to_icon.items()}
