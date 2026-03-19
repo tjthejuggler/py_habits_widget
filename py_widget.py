@@ -1,645 +1,669 @@
+"""
+py_widget.py — Main application assembly for the Habit Tracker desktop widget.
+Matches the Android Tail app's HabitGridScreen.kt layout:
+
+  ┌─────────────────────────────────────────────────────┐
+  │  ◀  Today / date  ▶          [📊] [✏] [ℹ] [⚙]     │  ← Top bar
+  ├─────────────────────────────────────────────────────┤
+  │  [general]  [screen2]  [screen3]                    │  ← Screen tabs
+  ├─────────────────────────────────────────────────────┤
+  │                                                     │
+  │   8-column × 10-row grid of HabitButton cells       │  ← Main grid
+  │                                                     │
+  ├─────────────────────────────────────────────────────┤
+  │  Info panel  /  Edit control bar  (conditional)     │  ← Bottom panel
+  └─────────────────────────────────────────────────────┘
+"""
 import sys
-from PyQt5.QtWidgets import (QApplication, QWidget, QGridLayout, QPushButton,
-                              QSpacerItem, QSizePolicy, QInputDialog, QLabel,
-                              QComboBox, QDialog, QVBoxLayout, QHBoxLayout,
-                              QCheckBox, QTabWidget, QTabBar)
-from PyQt5.QtGui import QPainter, QFont, QIcon
-from PyQt5.QtCore import QSize, Qt
-import matplotlib.pyplot as plt
 import os
-import json
-from IconFinder import IconFinder
-import time
-from streak_helper import *
-from habitdb_streak_finder import *
-from utilities import *
-import datetime
-import re
-import math
-import subprocess
+from datetime import date
 
-import habit_helper
+from PyQt5.QtWidgets import (
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
+    QPushButton, QLabel, QScrollArea, QFrame, QSizePolicy,
+    QFileDialog, QMessageBox
+)
+from PyQt5.QtGui import QFont, QColor, QPalette, QIcon
+from PyQt5.QtCore import Qt, QTimer, QSize
 
-# ── Relay file (shared with Android app) ────────────────────────────────────
-SCREENS_RELAY_FILE = '/home/twain/noteVault/tail/screens_layout.json'
+from habit_models import Habit, HabitScreen
+from habit_view_model import HabitViewModel, TOTAL_GRID_CELLS
+from habit_button import HabitButton, PlaceholderCell, CELL_SIZE
+from habit_colors import get_habit_icon_name
+from info_panel import HabitInfoPanel
+from edit_control_bar import EditModeControlBar
+from dialogs import (
+    IncrementDialog, TextInputDialog, AddScreenDialog,
+    RenameScreenDialog, AddHabitDialog, DeleteHabitConfirmDialog,
+    IconPickerDialog
+)
 
-def load_screens_layout():
+GRID_COLUMNS = 8
+DISPLAY_DATE_FMT = "%b %d, %Y"
+
+
+# ── Dark palette ───────────────────────────────────────────────────────────────
+
+def apply_dark_theme(app: QApplication):
+    """Apply a dark theme matching the Android app's Material3 dark surface."""
+    palette = QPalette()
+    surface = QColor(0x12, 0x12, 0x12)
+    on_surface = QColor(0xE0, 0xE0, 0xE0)
+    palette.setColor(QPalette.Window, surface)
+    palette.setColor(QPalette.WindowText, on_surface)
+    palette.setColor(QPalette.Base, QColor(0x1E, 0x1E, 0x1E))
+    palette.setColor(QPalette.AlternateBase, QColor(0x2A, 0x2A, 0x2A))
+    palette.setColor(QPalette.ToolTipBase, QColor(0x2A, 0x2A, 0x2A))
+    palette.setColor(QPalette.ToolTipText, on_surface)
+    palette.setColor(QPalette.Text, on_surface)
+    palette.setColor(QPalette.Button, QColor(0x2A, 0x2A, 0x2A))
+    palette.setColor(QPalette.ButtonText, on_surface)
+    palette.setColor(QPalette.BrightText, Qt.red)
+    palette.setColor(QPalette.Link, QColor(0x88, 0xCC, 0xFF))
+    palette.setColor(QPalette.Highlight, QColor(0x5A, 0x3A, 0x00))
+    palette.setColor(QPalette.HighlightedText, Qt.white)
+    app.setPalette(palette)
+    app.setStyleSheet("""
+        QToolTip {
+            background-color: #2A2A2A;
+            color: #E0E0E0;
+            border: 1px solid #555555;
+            padding: 4px;
+        }
+        QScrollBar:vertical {
+            background: #1A1A1A;
+            width: 8px;
+        }
+        QScrollBar::handle:vertical {
+            background: #444444;
+            border-radius: 4px;
+            min-height: 20px;
+        }
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+            height: 0px;
+        }
+    """)
+
+
+# ── Main Widget ────────────────────────────────────────────────────────────────
+
+class HabitGridWidget(QWidget):
     """
-    Reads screens_layout.json and returns a tuple:
-      (screens, habit_icons)
-    where screens is a list of screen dicts:
-      [{"id": ..., "name": ..., "habits": [...]}, ...]
-    and habit_icons is a dict of {habit_name: icon_name} overrides.
-    Falls back to a single screen with the legacy flat habit list if the file
-    is missing or malformed.
+    Main application widget matching the Android HabitGridScreen composable.
+    Assembles: top bar, screen tabs, habit grid, info panel, edit control bar.
     """
-    try:
-        with open(SCREENS_RELAY_FILE, 'r') as f:
-            data = json.load(f)
-        screens = data.get('screens', [])
-        habit_icons = data.get('habit_icons', {})
-        if screens:
-            return screens, habit_icons
-    except (FileNotFoundError, json.JSONDecodeError, KeyError):
-        pass
-    # Fallback: single screen with the legacy order, no icon overrides
-    return [{"id": "general", "name": "general", "habits": LEGACY_HABIT_ORDER}], {}
 
-# Legacy flat order — used only when screens_layout.json is absent/empty
-LEGACY_HABIT_ORDER = [
-    'Juggle lights', 'Unique juggle', 'Juggling record broke', 'Dream acted',
-    'Sleep watch', 'Apnea walked', 'Cold Shower Widget', 'Programming sessions',
-    'Book read', 'Fiction Book Intake', 'Joggle', 'Create juggle', 'Fun juggle',
-    'Drm Review', 'Early phone', 'Apnea practiced', 'Launch Squats Widget',
-    'Juggling tech sessions', 'Podcast finished', 'Fiction Video Intake',
-    'Blind juggle', 'Song juggle', 'Janki used', 'Lucidity trained',
-    'Anki created', 'Apnea apb', 'Launch Situps Widget', 'Writing sessions',
-    'Educational video watched', 'Chess', 'Juggling Balls Carry', 'Move juggle',
-    'Filmed juggle', 'Unusual experience', 'Anki mydis done', 'Apnea spb',
-    'Launch Pushups Widget', 'UC post', 'Article read', 'Rabbit Hole',
-    'Juggling Others Learn', 'Juggle run', 'Watch juggle', 'Meditations',
-    'Some anki', 'Lung stretch', 'Cardio sessions', 'AI tool', 'Read academic',
-    'Speak AI', 'Most Collisions', 'Free', 'Inspired juggle', 'Kind stranger',
-    'Health learned', 'Sweat', 'Good posture', 'Drew', 'Language studied',
-    'Communication Improved', 'No Coffee', 'Magic practiced', 'Juggle goal',
-    'Broke record', 'Took pills', 'Fasted', 'HIT', 'Question asked',
-    'Music listen', 'Unusually Kind', 'Tracked Sleep', 'Magic performed',
-    'Balanced', 'Grumpy blocker', 'Flossed', 'Todos done', 'Fresh air',
-    'Talk stranger', 'Memory practice'
-]
-
-with open('/home/twain/Projects/py_habits_widget/obsidian_dir.txt', 'r') as f:
-    obsidian_dir = f.read().strip()
-
-def notify(message):
-    msg = "notify-send ' ' '"+message+"'"
-    os.system(msg)
-
-class ButtonWithCheckbox(QWidget):
-    def __init__(self, activity, left_number, current_values, all_time_high_values, right_number, parent=None):
-        super().__init__(parent)
-        self.activity = activity
-        self.button = NumberedButton(left_number, current_values, all_time_high_values, right_number, self)
-        self.checkbox = QCheckBox(self)
-        self.checkbox.setFixedSize(24, 24)
-
-        self.layout = QGridLayout(self)
-        self.layout.addWidget(self.button, 0, 0, Qt.AlignLeft)
-        self.layout.addWidget(self.checkbox, 0, 0, Qt.AlignTop | Qt.AlignRight)
-        self.layout.setContentsMargins(0, 0, 0, 0)
-        self.layout.setSpacing(0)
-
-class NumberedButton(QPushButton):
-    def __init__(self, left_number, current_values, all_time_high_values, right_number, *args, **kwargs):
-        super(NumberedButton, self).__init__(*args, **kwargs)
-        self.left_number = left_number
-        self.upper_left_number = int(all_time_high_values["day"][1])
-        self.right_number = right_number
-        self.setToolTip(f'<nobr><font size="4">{args[0].activity}<br>Current streak/antistreak: {self.left_number}<br>'
-                        f'Longest streak: {self.right_number}<br>'
-                        f'(current) All time high - date:<br>'
-                        f'day: ({current_values["day"]}) {all_time_high_values["day"][1]} - {all_time_high_values["day"][0]}<br>'
-                        f'week: ({current_values["week"]}) {all_time_high_values["week"][1]} - {all_time_high_values["week"][0]}<br>'
-                        f'month: ({current_values["month"]}) {all_time_high_values["month"][1]} - {all_time_high_values["month"][0]}<br>'
-                        f'year: ({current_values["year"]}) {all_time_high_values["year"][1]} - {all_time_high_values["year"][0]}<br></font></nobr>')
-
-    def paintEvent(self, event):
-        super(NumberedButton, self).paintEvent(event)
-        painter = QPainter(self)
-        painter.setFont(QFont("Arial", 10))
-        right_number_text = str(self.right_number)
-        metrics = painter.fontMetrics()
-        right_text_width = metrics.horizontalAdvance(right_number_text)
-        painter.drawText(3, 95, str(self.left_number))
-        painter.drawText(3, 18, str(self.upper_left_number))
-        painter.drawText(95 - right_text_width, 95, right_number_text)
-
-class ClickableLabel(QLabel):
-    def mousePressEvent(self, event):
-        checked_activities = [button.activity for button in self.parent().button_with_checkboxes if button.checkbox.isChecked()]
-        self.create_graph(checked_activities)
-
-    def create_graph(self, checked_activities):
-        current_date_streak, current_date_antistreak, longest_streak_record, longest_antistreak_record, highest_net_streak_record, lowest_net_streak_record, week_average, month_average, year_average, overall_average = get_streak_numbers(True, checked_activities)
-
-
-# ── Per-screen habit grid ────────────────────────────────────────────────────
-
-class ScreenGrid(QWidget):
-    """
-    A single screen (tab) of habit buttons.  Mirrors one entry from screens_layout.json.
-    The habits list is in row-major order (left-to-right, top-to-bottom), matching Android.
-    """
-    def __init__(self, screen_name, habit_names, habitsdb, habitsdb_to_add, parent_grid, habit_icon_overrides=None):
-        super().__init__()
-        self.screen_name = screen_name
-        self.habit_names = habit_names   # ordered list in row-major order, may contain "" placeholders
-        self.habitsdb = habitsdb
-        self.habitsdb_to_add = habitsdb_to_add
-        self.parent_grid = parent_grid   # reference to IconGrid for increment_habit
-        self.habit_icon_overrides = habit_icon_overrides or {}  # {habit_name: icon_name}
-        self.button_with_checkboxes = []
-        self._build_grid()
-
-    def _resolve_icon(self, activity):
-        """Return the icon name for an activity, respecting overrides from the relay file."""
-        if activity in self.habit_icon_overrides:
-            return self.habit_icon_overrides[activity]
-        icon_finder = IconFinder()
-        return icon_finder.find_icon(activity)
-
-    def _build_grid(self):
-        grid_layout = QGridLayout()
-        grid_layout.setContentsMargins(0, 0, 0, 0)
-        grid_layout.setSpacing(0)
-        self.setLayout(grid_layout)
-
-        num_columns = 8
-        num_rows = 10
-        index = 0
-
-        # habits list is row-major: index = row * num_columns + col
-        # so we iterate row-first (outer=row, inner=col) to place left-to-right
-        for row in range(num_rows):
-            for col in range(num_columns):
-                if index < len(self.habit_names):
-                    activity = self.habit_names[index]
-                    if activity and activity in self.habitsdb:
-                        inner_dict = self.habitsdb[activity]
-                        days_since_not_zero = get_days_since_not_zero(inner_dict)
-                        days_since_zero = get_days_since_zero(inner_dict)
-                        left_number = -days_since_not_zero
-                        if days_since_not_zero < 2:
-                            days_since_zero = get_days_since_zero_minus(inner_dict)
-                            left_number = days_since_zero
-
-                        current_values = {}
-                        current_values["day"] = inner_dict[list(inner_dict.keys())[-1]]
-                        current_values["week"] = get_average_of_last_n_days(inner_dict, 7)
-                        current_values["month"] = get_average_of_last_n_days(inner_dict, 30)
-                        current_values["year"] = get_average_of_last_n_days(inner_dict, 365)
-
-                        all_time_high_values = {}
-                        all_time_high_values["day"] = get_all_time_high_rolling(inner_dict, 1)
-                        all_time_high_values["week"] = get_all_time_high_rolling(inner_dict, 7)
-                        all_time_high_values["month"] = get_all_time_high_rolling(inner_dict, 30)
-                        all_time_high_values["year"] = get_all_time_high_rolling(inner_dict, 365)
-                        right_number = get_longest_streak(inner_dict)
-
-                        last_value_from_habitsdb = list(inner_dict.values())[-1]
-                        value_from_habitsdb_to_add = self.habitsdb_to_add.get(activity, 0)
-                        last_value = last_value_from_habitsdb + value_from_habitsdb_to_add
-
-                        if "Pushups" in activity:
-                            last_value = math.floor(last_value / 30 + 0.5)
-                        elif "Situps" in activity:
-                            last_value = math.floor(last_value / 50 + 0.5)
-                        elif "Squats" in activity:
-                            last_value = math.floor(last_value / 30 + 0.5)
-                        elif "Sweat" in activity:
-                            last_value = math.floor(last_value / 15 + 0.5)
-                        elif "Cold Shower" in activity:
-                            if last_value > 0 and last_value < 3:
-                                last_value = 3
-                            last_value = math.floor(last_value / 3 + 0.5)
-                        last_value = math.floor(last_value + 0.5)
-
-                        icon_folder = 'redgoldpainthd'
-                        if last_value == 1:
-                            icon_folder = 'orangewhitepearlhd'
-                        elif last_value == 2:
-                            icon_folder = 'greenfloralhd'
-                        elif last_value == 3:
-                            icon_folder = 'bluewhitepearlhd'
-                        elif last_value == 4:
-                            icon_folder = 'pinkorbhd'
-                        elif last_value == 5:
-                            icon_folder = 'yellowpainthd'
-                        elif last_value > 5:
-                            icon_folder = 'transparentglasshd'
-
-                        icon_dir = os.path.expanduser('~/Projects/py_habits_widget/icons/' + icon_folder + '/')
-                        icon = self._resolve_icon(activity)
-                        icon_file = icon + '.png'
-                        icon_path = icon_dir + icon_file
-
-                        button_with_checkbox = ButtonWithCheckbox(
-                            activity, left_number, current_values, all_time_high_values, right_number, self
-                        )
-                        button_with_checkbox.button.setIcon(QIcon(icon_path))
-                        button_with_checkbox.button.setIconSize(QSize(100, 100))
-                        button_with_checkbox.button.setFixedSize(100, 100)
-                        button_with_checkbox.button.clicked.connect(
-                            lambda checked, a=activity: self.parent_grid.increment_habit(a)
-                        )
-                        button_with_checkbox.button.setFocusPolicy(Qt.NoFocus)
-                        grid_layout.addWidget(button_with_checkbox, row, col)
-                        self.button_with_checkboxes.append(button_with_checkbox)
-                    else:
-                        # Empty placeholder cell (activity name is "" or not in habitsdb)
-                        spacer = QSpacerItem(100, 100, QSizePolicy.Fixed, QSizePolicy.Fixed)
-                        grid_layout.addItem(spacer, row, col)
-                else:
-                    # Index beyond the habits list — fill with empty spacer
-                    spacer = QSpacerItem(100, 100, QSizePolicy.Fixed, QSizePolicy.Fixed)
-                    grid_layout.addItem(spacer, row, col)
-                index += 1
-
-    def update_icons(self, habitsdb, habitsdb_to_add, habit_icon_overrides=None):
-        """Refresh icon images after an increment (no layout rebuild needed)."""
-        self.habitsdb = habitsdb
-        self.habitsdb_to_add = habitsdb_to_add
-        if habit_icon_overrides is not None:
-            self.habit_icon_overrides = habit_icon_overrides
-        button_index = 0
-        for activity in self.habit_names:
-            if not activity or activity not in habitsdb:
-                continue
-            if button_index >= len(self.button_with_checkboxes):
-                break
-            inner_dict = habitsdb[activity]
-            last_value_from_habitsdb = list(inner_dict.values())[-1]
-            value_from_habitsdb_to_add = habitsdb_to_add.get(activity, 0)
-            last_value = last_value_from_habitsdb + value_from_habitsdb_to_add
-
-            if "Pushups" in activity:
-                last_value = math.floor(last_value / 30 + 0.5)
-            elif "Situps" in activity:
-                last_value = math.floor(last_value / 50 + 0.5)
-            elif "Squats" in activity:
-                last_value = math.floor(last_value / 30 + 0.5)
-            elif "Sweat" in activity:
-                last_value = math.floor(last_value / 15 + 0.5)
-            elif "Cold Shower" in activity:
-                if last_value > 0 and last_value < 3:
-                    last_value = 3
-                last_value = math.floor(last_value / 3 + 0.5)
-            last_value = math.floor(last_value + 0.5)
-
-            icon_folder = 'redgoldpainthd'
-            if last_value == 1:
-                icon_folder = 'orangewhitepearlhd'
-            elif last_value == 2:
-                icon_folder = 'greenfloralhd'
-            elif last_value == 3:
-                icon_folder = 'bluewhitepearlhd'
-            elif last_value == 4:
-                icon_folder = 'pinkorbhd'
-            elif last_value == 5:
-                icon_folder = 'yellowpainthd'
-            elif last_value > 5:
-                icon_folder = 'transparentglasshd'
-
-            icon_dir = os.path.expanduser('~/Projects/py_habits_widget/icons/' + icon_folder + '/')
-            icon = self._resolve_icon(activity)
-            icon_file = icon + '.png'
-            icon_path = icon_dir + icon_file
-            self.button_with_checkboxes[button_index].button.setIcon(QIcon(icon_path))
-            button_index += 1
-
-
-# ── Main window ──────────────────────────────────────────────────────────────
-
-class IconGrid(QWidget):
     def __init__(self):
         super().__init__()
-        self.button_with_checkboxes = []  # flat list across all screens (for ClickableLabel)
-        self.screen_grids = []            # list of ScreenGrid widgets
-        self.init_ui()
+        self.setWindowTitle("Tail — Habit Tracker")
+        # Window size: 8 cells × CELL_SIZE + spacing + margins ≈ 440px wide
+        # Height: top bar + tabs + 10 rows × CELL_SIZE + spacing ≈ 600px
+        grid_w = CELL_SIZE * 8 + 4 * 9 + 8  # 8 cells + 9 gaps of 4px + 8px margins
+        grid_h = CELL_SIZE * 10 + 4 * 11 + 8
+        self.setMinimumSize(grid_w, grid_h + 80)  # +80 for top bar + tab row
 
-    def _load_data(self):
-        """Load the unified habit database and pending increments."""
-        habitsdb = make_json(obsidian_dir + 'habitsdb.txt')
-        habitsdb_to_add = make_json(obsidian_dir + 'habitsdb_to_add.txt')
-        return habitsdb, habitsdb_to_add
+        # ── ViewModel ──────────────────────────────────────────────────────
+        self.vm = HabitViewModel()
+        self.vm.set_on_state_changed(self._on_state_changed)
 
-    def init_ui(self):
-        outer_layout = QVBoxLayout()
-        outer_layout.setContentsMargins(0, 0, 0, 0)
-        outer_layout.setSpacing(0)
-        self.setLayout(outer_layout)
+        # ── Grid cell widgets ──────────────────────────────────────────────
+        self._grid_cells = []  # list of (HabitButton | PlaceholderCell | QWidget)
 
-        # ── Top bar: total label + wallpaper + refresh ───────────────────────
-        top_bar = QHBoxLayout()
-        top_bar.setContentsMargins(4, 2, 4, 2)
-        outer_layout.addLayout(top_bar)
+        # ── Build UI ───────────────────────────────────────────────────────
+        self._build_ui()
+        self._refresh_all()
 
-        self.total_label = ClickableLabel()
-        self.total_label.setParent(self)
-        top_bar.addWidget(self.total_label)
+        # ── Auto-refresh timer (every 60 seconds) ─────────────────────────
+        self._refresh_timer = QTimer(self)
+        self._refresh_timer.timeout.connect(self._auto_refresh)
+        self._refresh_timer.start(60_000)
 
-        top_bar.addStretch()
+    # ── UI Construction ────────────────────────────────────────────────────────
 
-        wallpaper_button = QPushButton()
-        wallpaper_button.setIcon(QIcon.fromTheme('preferences-desktop-wallpaper'))
-        wallpaper_button.setFixedSize(32, 32)
-        wallpaper_button.setToolTip('Open Wallpaper Color Manager')
-        wallpaper_button.clicked.connect(self.open_wallpaper_control_panel)
-        top_bar.addWidget(wallpaper_button)
+    def _build_ui(self):
+        """Build the complete UI hierarchy."""
+        self.setStyleSheet("background-color: #121212;")
 
-        refresh_button = QPushButton()
-        refresh_button.setIcon(QIcon.fromTheme('view-refresh'))
-        refresh_button.setFixedSize(32, 32)
-        refresh_button.clicked.connect(self.refresh_widget)
-        top_bar.addWidget(refresh_button)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
 
-        # ── Tab widget for screens ───────────────────────────────────────────
-        self.tab_widget = QTabWidget()
-        self.tab_widget.setTabPosition(QTabWidget.North)
-        # Each screen is 8 cols × 10 rows of 100×100 buttons = 800×1000px.
-        # Fix the tab widget to exactly that size so the window doesn't balloon.
-        self.tab_widget.setFixedSize(800, 1000)
-        outer_layout.addWidget(self.tab_widget)
+        # 1. Top bar
+        self._top_bar = self._build_top_bar()
+        root.addWidget(self._top_bar)
 
-        self._rebuild_tabs()
+        # 2. Screen tab row
+        self._tab_row_container = QWidget()
+        self._tab_row_container.setStyleSheet("background-color: #111111;")
+        self._tab_row_layout = QHBoxLayout(self._tab_row_container)
+        self._tab_row_layout.setContentsMargins(4, 2, 4, 2)
+        self._tab_row_layout.setSpacing(4)
+        self._tab_row_layout.addStretch()
+        root.addWidget(self._tab_row_container)
 
-        self.update_total()
+        # 3. Scrollable grid area
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; background-color: #121212; }")
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
-        self.setWindowTitle('Habit Tracker Widget')
-        icon_path = '/home/twain/Projects/py_habits_widget/icons/blue_icon.png'
-        self.setWindowIcon(QIcon(icon_path))
-        self.adjustSize()
-        self.show()
+        self._grid_widget = QWidget()
+        self._grid_widget.setStyleSheet("background-color: #121212;")
+        self._grid_layout = QGridLayout(self._grid_widget)
+        self._grid_layout.setContentsMargins(4, 4, 4, 4)
+        self._grid_layout.setSpacing(3)  # Android uses 2.dp padding per cell ≈ 4dp gap
 
-    def _rebuild_tabs(self):
-        """Clear and rebuild all screen tabs from screens_layout.json."""
-        self.tab_widget.clear()
-        self.screen_grids.clear()
-        self.button_with_checkboxes.clear()
+        scroll.setWidget(self._grid_widget)
+        root.addWidget(scroll, 1)  # stretch factor 1 — grid takes remaining space
 
-        habitsdb, habitsdb_to_add = self._load_data()
-        screens, habit_icons = load_screens_layout()
+        # 4. Info panel (hidden by default)
+        self._info_panel = HabitInfoPanel()
+        self._info_panel.hide()
+        root.addWidget(self._info_panel)
 
-        for screen in screens:
-            screen_name = screen.get('name', 'screen')
-            habit_names = screen.get('habits', [])
-            sg = ScreenGrid(screen_name, habit_names, habitsdb, habitsdb_to_add, self,
-                            habit_icon_overrides=habit_icons)
-            self.screen_grids.append(sg)
-            self.tab_widget.addTab(sg, screen_name)
-            # Accumulate all buttons for the ClickableLabel graph feature
-            self.button_with_checkboxes.extend(sg.button_with_checkboxes)
+        # 5. Edit control bar (hidden by default)
+        self._edit_bar = EditModeControlBar()
+        self._edit_bar.hide()
+        self._connect_edit_bar_signals()
 
-    def increment_habit(self, argument):
-        write_updated_habitsdb_to_add = False
-        write_updated_personal_records = False
-        habitsdb_to_add_dir = obsidian_dir + 'habitsdb_to_add.txt'
-        habitsdb_to_add = make_json(habitsdb_to_add_dir)
-        if "Widget" in argument:
-            value, ok = QInputDialog.getInt(self, 'Input Dialog', f'Enter the increment for {argument}:', min=1)
-            if ok:
-                habitsdb_to_add[argument] += value
-                write_updated_habitsdb_to_add = True
-        elif "Broke record" in argument or "Apnea spb" in argument:
-            personal_records_dir = obsidian_dir + 'tail/personal_records.txt'
-            if "Apnea spb" in argument:
-                personal_records_dir = obsidian_dir + 'tail/apnea_records.txt'
-            personal_records = make_json(personal_records_dir)
+        # Wrap edit bar in a scroll area for long settings lists
+        self._edit_bar_scroll = QScrollArea()
+        self._edit_bar_scroll.setWidgetResizable(True)
+        self._edit_bar_scroll.setWidget(self._edit_bar)
+        self._edit_bar_scroll.setMaximumHeight(300)
+        self._edit_bar_scroll.setStyleSheet("QScrollArea { border: none; }")
+        self._edit_bar_scroll.hide()
+        root.addWidget(self._edit_bar_scroll)
 
-            dialog = QDialog(self)
-            dialog.setWindowTitle("Select an item")
-            layout = QVBoxLayout()
+    def _build_top_bar(self) -> QWidget:
+        """Build the top app bar matching Android's TopAppBar."""
+        bar = QWidget()
+        bar.setStyleSheet("background-color: #1E1E1E;")
+        bar.setFixedHeight(48)
 
-            combo = QComboBox()
-            keys_with_days = []
-            for key in personal_records:
-                record_dates = personal_records[key]["records"]
-                if record_dates:
-                    latest_date = max(record_dates, key=lambda x: datetime.datetime.strptime(x, '%Y-%m-%d'))
-                    days_since_last_record = (datetime.date.today() - datetime.datetime.strptime(latest_date, '%Y-%m-%d').date()).days
-                    display_text = f"{key} ({days_since_last_record} days ago)"
-                else:
-                    display_text = f"{key} (x)"
-                keys_with_days.append(display_text)
-            combo.addItems(keys_with_days)
+        layout = QHBoxLayout(bar)
+        layout.setContentsMargins(4, 0, 4, 0)
+        layout.setSpacing(2)
 
-            layout.addWidget(combo)
-            ok_button = QPushButton("OK")
-            ok_button.clicked.connect(dialog.accept)
-            layout.addWidget(ok_button)
-            dialog.setLayout(layout)
+        # Back arrow
+        self._btn_prev_day = QPushButton("◀")
+        self._btn_prev_day.setFixedSize(36, 36)
+        self._btn_prev_day.setStyleSheet(self._icon_btn_style())
+        self._btn_prev_day.clicked.connect(lambda: self.vm.navigate_day(-1))
+        layout.addWidget(self._btn_prev_day)
 
-            result = dialog.exec_()
-            if result == QDialog.Accepted:
-                selected_key = combo.currentText()
-                selected_key = re.sub(r'\s*\([^)]*\)', '', selected_key).rstrip()
-                selected_item = personal_records[selected_key]
+        # Date label
+        self._date_label = QLabel("Today")
+        self._date_label.setStyleSheet("color: white; font-size: 14px; font-weight: bold;")
+        self._date_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self._date_label)
 
-                description = selected_item["description"]
-                if selected_item["records"]:
-                    latest_date = max(selected_item["records"], key=lambda x: datetime.datetime.strptime(x, '%Y-%m-%d'))
-                    latest_value = selected_item["records"][latest_date]
-                    description += f'\nMost recent record: {latest_date} - {latest_value}'
-                value, ok = QInputDialog.getText(self, 'Input Dialog', f'{description}\nEnter the value for {selected_key}:')
+        # Forward arrow
+        self._btn_next_day = QPushButton("▶")
+        self._btn_next_day.setFixedSize(36, 36)
+        self._btn_next_day.setStyleSheet(self._icon_btn_style())
+        self._btn_next_day.clicked.connect(lambda: self.vm.navigate_day(+1))
+        layout.addWidget(self._btn_next_day)
 
-                if ok:
-                    selected_item["records"][str(datetime.date.today())] = value
-                    write_updated_personal_records = True
-                    habitsdb_to_add[argument] += 1
-                    write_updated_habitsdb_to_add = True
-                else:
-                    write_updated_personal_records = False
-            else:
-                write_updated_personal_records = False
+        layout.addStretch()
+
+        # Edit mode toggle
+        self._btn_edit = QPushButton("✏")
+        self._btn_edit.setFixedSize(36, 36)
+        self._btn_edit.setToolTip("Edit mode")
+        self._btn_edit.setStyleSheet(self._icon_btn_style())
+        self._btn_edit.clicked.connect(self.vm.toggle_edit_mode)
+        layout.addWidget(self._btn_edit)
+
+        # Info mode toggle
+        self._btn_info = QPushButton("ℹ")
+        self._btn_info.setFixedSize(36, 36)
+        self._btn_info.setToolTip("Info mode")
+        self._btn_info.setStyleSheet(self._icon_btn_style())
+        self._btn_info.clicked.connect(self.vm.toggle_info_mode)
+        layout.addWidget(self._btn_info)
+
+        # Settings button
+        self._btn_settings = QPushButton("⚙")
+        self._btn_settings.setFixedSize(36, 36)
+        self._btn_settings.setToolTip("Settings")
+        self._btn_settings.setStyleSheet(self._icon_btn_style())
+        self._btn_settings.clicked.connect(self._on_settings_clicked)
+        layout.addWidget(self._btn_settings)
+
+        return bar
+
+    @staticmethod
+    def _icon_btn_style(active: bool = False, active_color: str = "#FFAA00",
+                        active_bg: str = "#4A2A00") -> str:
+        """Returns stylesheet for a top-bar icon button."""
+        if active:
+            return f"""
+                QPushButton {{
+                    background-color: {active_bg};
+                    color: {active_color};
+                    border: none;
+                    border-radius: 4px;
+                    font-size: 16px;
+                }}
+                QPushButton:hover {{ background-color: #5A3A00; }}
+            """
+        return """
+            QPushButton {
+                background-color: transparent;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                font-size: 16px;
+            }
+            QPushButton:hover { background-color: #333333; }
+            QPushButton:disabled { color: #555555; }
+        """
+
+    def _connect_edit_bar_signals(self):
+        """Connect all EditModeControlBar signals to handlers."""
+        self._edit_bar.start_move.connect(self.vm.start_move_mode)
+        self._edit_bar.add_habit.connect(self._on_add_habit_requested)
+        self._edit_bar.move_to_screen.connect(self.vm.move_habit_to_screen)
+        self._edit_bar.add_screen.connect(self._on_add_screen)
+        self._edit_bar.delete_screen.connect(self._on_delete_screen)
+        self._edit_bar.toggle_max_one.connect(self.vm.toggle_max_one)
+        self._edit_bar.toggle_custom_input.connect(self.vm.toggle_custom_input)
+        self._edit_bar.toggle_text_input.connect(self.vm.toggle_text_input)
+        self._edit_bar.toggle_text_input_options.connect(self.vm.toggle_text_input_options)
+        self._edit_bar.pick_text_input_file.connect(self._on_pick_text_input_file)
+        self._edit_bar.toggle_dated_entry.connect(self.vm.toggle_dated_entry)
+        self._edit_bar.pick_dated_entry_file.connect(self._on_pick_dated_entry_file)
+        self._edit_bar.delete_habit.connect(self._on_delete_habit)
+        self._edit_bar.change_icon.connect(self._on_change_icon)
+        self._edit_bar.set_count.connect(self.vm.set_habit_count)
+        self._edit_bar.set_divider.connect(self.vm.set_habit_divider)
+
+    # ── State refresh ──────────────────────────────────────────────────────────
+
+    def _on_state_changed(self):
+        """Called by the ViewModel whenever state changes."""
+        self._refresh_all()
+
+    def _auto_refresh(self):
+        """Periodic refresh to catch external database changes."""
+        self.vm.refresh()
+
+    def _refresh_all(self):
+        """Rebuild all UI elements from current ViewModel state."""
+        self._refresh_top_bar()
+        self._refresh_tab_row()
+        self._refresh_grid()
+        self._refresh_bottom_panels()
+
+    def _refresh_top_bar(self):
+        """Update the top bar date label and button states."""
+        is_today = self.vm.is_today
+        if is_today:
+            self._date_label.setText("Today")
+            self._date_label.setStyleSheet("color: white; font-size: 14px; font-weight: bold;")
         else:
-            habitsdb_to_add[argument] += 1
-            write_updated_habitsdb_to_add = True
+            self._date_label.setText(self.vm.selected_date.strftime(DISPLAY_DATE_FMT))
+            self._date_label.setStyleSheet("color: #FFD700; font-size: 14px; font-weight: bold;")
 
-        if write_updated_habitsdb_to_add:
-            result = "Pending habits\n"
-            for key, value in habitsdb_to_add.items():
-                if value > 0:
-                    result += f"{key}: {value}\n"
-            notify(result)
-            habitsdb_to_add_dir = os.path.expanduser(habitsdb_to_add_dir)
-            with open(habitsdb_to_add_dir, 'w') as f:
-                json.dump(habitsdb_to_add, f, indent=4, sort_keys=True)
-            time.sleep(1)
-            update_theme_script = '~/Projects/tail/habits_kde_theme.py'
-            update_theme_script = os.path.expanduser(update_theme_script)
-            os.system('python3 ' + update_theme_script)
-            self.update_icons()
-            self.update_total()
-        if write_updated_personal_records:
-            personal_records_dir = os.path.expanduser(personal_records_dir)
-            with open(personal_records_dir, 'w') as f:
-                json.dump(personal_records, f, indent=4, sort_keys=True)
+        self._btn_next_day.setEnabled(not is_today)
 
-    def refresh_widget(self):
-        subprocess.run(['pkill', '-f', 'habits_kde_theme_watchdog_phone.sh'])
-        startup_script = '/home/twain/Projects/tail/habits_kde_theme_watchdog_phone.sh'
-        subprocess.Popen(['bash', startup_script])
-        self.close()
-        sys.exit(0)
+        # Edit button highlight
+        if self.vm.edit_mode:
+            self._btn_edit.setStyleSheet(self._icon_btn_style(
+                active=True, active_color="#FFAA00", active_bg="#4A2A00"))
+        else:
+            self._btn_edit.setStyleSheet(self._icon_btn_style())
 
-    def open_wallpaper_control_panel(self):
-        wallpaper_control_panel = '/home/twain/Projects/tail/wallpaper_color_manager_new/color_control_panel.py'
-        subprocess.Popen(['python3', wallpaper_control_panel])
+        # Info button highlight
+        if self.vm.info_mode:
+            self._btn_info.setStyleSheet(self._icon_btn_style(
+                active=True, active_color="#88CCFF", active_bg="#1A4A7A"))
+        else:
+            self._btn_info.setStyleSheet(self._icon_btn_style())
 
-    def update_icons(self):
-        """Refresh icon images on all screen tabs after an increment."""
-        habitsdb, habitsdb_to_add = self._load_data()
-        # Re-read icon overrides in case they changed (e.g. relay file updated)
-        _, habit_icons = load_screens_layout()
-        for sg in self.screen_grids:
-            sg.update_icons(habitsdb, habitsdb_to_add, habit_icon_overrides=habit_icons)
+    def _refresh_tab_row(self):
+        """Rebuild the screen tab row."""
+        # Clear existing tabs
+        while self._tab_row_layout.count():
+            item = self._tab_row_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
 
-    def get_icons_and_scripts(self):
-        """
-        Returns a flat list of icon data tuples for all habits across all screens,
-        used by update_total() for today's count calculation.
-        """
-        habitsdb, habitsdb_to_add = self._load_data()
-        screens, _habit_icons = load_screens_layout()
-        # Collect unique habit names across all screens (preserve order, skip duplicates/empty)
-        seen = set()
-        all_habits = []
-        for screen in screens:
-            for h in screen.get('habits', []):
-                if h and h not in seen:
-                    seen.add(h)
-                    all_habits.append(h)
+        screens = self.vm.habit_screens
+        if len(screens) <= 1:
+            self._tab_row_container.hide()
+            return
 
-        icons_and_scripts = []
-        total_right_number = 0
-        for activity in all_habits:
-            if activity in habitsdb:
-                inner_dict = habitsdb[activity]
-                days_since_not_zero = get_days_since_not_zero(inner_dict)
-                days_since_zero = get_days_since_zero(inner_dict)
-                left_number = -days_since_not_zero
-                if days_since_not_zero < 2:
-                    days_since_zero = get_days_since_zero_minus(inner_dict)
-                    left_number = days_since_zero
+        self._tab_row_container.show()
+        for idx, screen in enumerate(screens):
+            is_active = idx == self.vm.active_screen_index
+            label = f"✎ {screen.name}" if (self.vm.edit_mode and is_active) else screen.name
 
-                current_values = {}
-                current_values["day"] = inner_dict[list(inner_dict.keys())[-1]]
-                current_values["week"] = get_average_of_last_n_days(inner_dict, 7)
-                current_values["month"] = get_average_of_last_n_days(inner_dict, 30)
-                current_values["year"] = get_average_of_last_n_days(inner_dict, 365)
-
-                all_time_high_values = {}
-                all_time_high_values["day"] = get_all_time_high_rolling(inner_dict, 1)
-                all_time_high_values["week"] = get_all_time_high_rolling(inner_dict, 7)
-                all_time_high_values["month"] = get_all_time_high_rolling(inner_dict, 30)
-                all_time_high_values["year"] = get_all_time_high_rolling(inner_dict, 365)
-                right_number = get_longest_streak(inner_dict)
-                total_right_number += right_number
-
-                last_value_from_habitsdb = list(inner_dict.values())[-1]
-                value_from_habitsdb_to_add = habitsdb_to_add.get(activity, 0)
-                last_value = last_value_from_habitsdb + value_from_habitsdb_to_add
-
-                icon_folder = 'redgoldpainthd'
-                icon_dir = os.path.expanduser('~/Projects/py_habits_widget/icons/' + icon_folder + '/')
-                icon_finder = IconFinder()
-                icon = icon_finder.find_icon(activity)
-                icon_file = icon + '.png'
-                icons_and_scripts.append((icon_dir + icon_file, activity, activity, left_number, current_values, all_time_high_values, right_number))
+            btn = QPushButton(label)
+            btn.setFixedHeight(32)
+            if is_active:
+                btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #555555;
+                        color: white;
+                        border: none;
+                        border-radius: 4px;
+                        padding: 0 10px;
+                        font-size: 12px;
+                        font-weight: bold;
+                    }
+                    QPushButton:hover { background-color: #666666; }
+                """)
             else:
-                icons_and_scripts.append(None)
+                btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: transparent;
+                        color: #888888;
+                        border: none;
+                        border-radius: 4px;
+                        padding: 0 10px;
+                        font-size: 12px;
+                    }
+                    QPushButton:hover { background-color: #333333; }
+                """)
 
-        print("total_right_number", total_right_number)
-        return icons_and_scripts
+            # In edit mode, clicking active tab opens rename dialog
+            if self.vm.edit_mode and is_active:
+                btn.clicked.connect(lambda checked, i=idx: self._on_rename_screen(i))
+            else:
+                btn.clicked.connect(lambda checked, i=idx: self.vm.switch_screen(i))
 
-    def update_total(self):
-        icons_and_scripts = self.get_icons_and_scripts()
-        today_total = 0
+            self._tab_row_layout.addWidget(btn)
 
-        # Compute week/month averages directly from the unified habitsdb
-        week_avg = 0
-        month_avg = 0
-        last_7_days_total, last_30_days_total = 0, 0
-        days_counted_week, days_counted_month = 0, 0
+        self._tab_row_layout.addStretch()
 
-        habitsdb, habitsdb_to_add = self._load_data()
+    def _refresh_grid(self):
+        """Rebuild the 8-column grid of habit buttons and placeholders."""
+        # Remove all existing grid widgets
+        for cell in self._grid_cells:
+            cell.setParent(None)
+            cell.deleteLater()
+        self._grid_cells.clear()
 
-        for item in icons_and_scripts:
-            if item is not None:
-                icon, arg, activity, left_number, current_values, all_time_high_values, right_number = item
+        habits = self.vm.habits
+        is_move_pending = self.vm.move_pending_source_index >= 0
 
-                if arg in habitsdb:
-                    inner_dict = habitsdb[arg]
-                    sorted_dates = sorted(inner_dict.keys(), reverse=True)
-                    if sorted_dates:
-                        current_habit_today = inner_dict[sorted_dates[0]] + habitsdb_to_add.get(arg, 0)
-                        today_total += habit_helper.adjust_habit_count(current_habit_today, arg)
+        # Build cells list: habits + placeholders to fill TOTAL_GRID_CELLS
+        total_cells = max(TOTAL_GRID_CELLS, len(habits))
 
-                if arg in habitsdb:
-                    inner_dict = habitsdb[arg]
-                    sorted_dates = sorted(inner_dict.keys(), reverse=True)
-                    current_date = datetime.datetime.now().date()
-                    seven_days_ago = current_date - datetime.timedelta(days=7)
-                    thirty_days_ago = current_date - datetime.timedelta(days=30)
+        for idx in range(total_cells):
+            row = idx // GRID_COLUMNS
+            col = idx % GRID_COLUMNS
 
-                    last_7_days_count = 0
-                    activity_days_week = set()
-                    for date_str in sorted_dates:
-                        date_obj = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
-                        if date_obj >= seven_days_ago and date_obj <= current_date:
-                            last_7_days_count += habit_helper.adjust_habit_count(inner_dict[date_str], arg)
-                            activity_days_week.add(date_str)
-                    last_7_days_total += last_7_days_count
-                    days_counted_week = max(days_counted_week, len(activity_days_week))
+            habit = habits[idx] if idx < len(habits) else None
+            # Empty-name habits are embedded placeholders
+            if habit is not None and not habit.name:
+                habit = None
 
-                    last_30_days_count = 0
-                    activity_days_month = set()
-                    for date_str in sorted_dates:
-                        date_obj = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
-                        if date_obj >= thirty_days_ago and date_obj <= current_date:
-                            last_30_days_count += habit_helper.adjust_habit_count(inner_dict[date_str], arg)
-                            activity_days_month.add(date_str)
-                    last_30_days_total += last_30_days_count
-                    days_counted_month = max(days_counted_month, len(activity_days_month))
+            if habit is not None:
+                cell = self._create_habit_cell(habit, idx, is_move_pending)
+            elif self.vm.edit_mode:
+                cell = self._create_placeholder_cell(idx, is_move_pending)
+            else:
+                # Invisible spacer in normal mode
+                cell = QWidget()
+                cell.setFixedSize(CELL_SIZE, CELL_SIZE)
+                cell.setStyleSheet("background-color: transparent;")
 
-        current_date_streak, current_date_antistreak, longest_streak_record, longest_antistreak_record, highest_net_streak_record, lowest_net_streak_record, week_average, month_average, year_average, overall_average = get_streak_numbers(False, [])
+            self._grid_layout.addWidget(cell, row, col)
+            self._grid_cells.append(cell)
 
-        net_streak = current_date_streak - current_date_antistreak
-        streak_text = f"{net_streak}:{lowest_net_streak_record}:{highest_net_streak_record}\ns {current_date_streak}:{longest_streak_record}\nas {current_date_antistreak}:{longest_antistreak_record}\n"
+    def _create_habit_cell(self, habit: Habit, index: int, is_move_pending: bool) -> HabitButton:
+        """Create a HabitButton for a real habit."""
+        btn = HabitButton(habit)
+        btn.set_custom_icon_overrides(self.vm.settings.habit_icons)
 
-        week_avg = last_7_days_total / min(max(days_counted_week, 1), 7)
-        month_avg = last_30_days_total / min(max(days_counted_month, 1), 30)
+        is_edit_selected = self.vm.edit_mode and index == self.vm.selected_edit_index
+        is_info_selected = (self.vm.info_mode and self.vm.selected_info_habit is not None
+                            and self.vm.selected_info_habit.name == habit.name)
+        is_move_source = self.vm.edit_mode and index == self.vm.move_pending_source_index
 
-        self.total_label.setText(f"{streak_text}{today_total}|{week_avg:.1f}|{month_avg:.1f}\n{week_average[-1]:.1f}|{month_average[-1]:.1f}|{year_average[-1]:.1f}|{overall_average[-1]:.1f}")
+        btn.set_modes(
+            info_mode=self.vm.info_mode,
+            edit_mode=self.vm.edit_mode,
+            is_selected=is_edit_selected or is_info_selected,
+            is_move_pending_source=is_move_source,
+            is_move_pending_target=is_move_pending and not is_move_source and self.vm.edit_mode
+        )
 
-        streaks_dir = os.path.expanduser(obsidian_dir + '/tail/streaks.txt')
-        last_7_days_average = math.floor(week_avg * 10 + 0.5) / 10
-        last_30_days_average = math.floor(month_avg * 10 + 0.5) / 10
-        with open(streaks_dir, 'w') as f:
-            json.dump({"net_streak": net_streak, "highest_net_streak_record": highest_net_streak_record, "lowest_net_streak_record": lowest_net_streak_record, "current_streak": current_date_streak, "longest_streak": longest_streak_record, "current_antistreak": current_date_antistreak, "longest_antistreak": longest_antistreak_record, "today_total": today_total, "last_7_days_average": last_7_days_average, "last_30_days_average": last_30_days_average, "week_average": int(week_average[-1]), "month_average": int(month_average[-1]), "year_average": int(year_average[-1]), "overall_average": int(overall_average[-1])}, f, indent=4, sort_keys=True)
+        # Click handler
+        btn.clicked.connect(lambda h=habit, i=index: self._on_habit_clicked(h, i))
+        # Double-click (long press equivalent)
+        btn.long_clicked.connect(lambda h=habit: self._on_habit_long_clicked(h))
+
+        return btn
+
+    def _create_placeholder_cell(self, index: int, is_move_pending: bool) -> PlaceholderCell:
+        """Create a PlaceholderCell for an empty grid position in edit mode."""
+        cell = PlaceholderCell()
+        cell.set_state(
+            is_selected=index == self.vm.selected_edit_index,
+            is_move_pending_target=is_move_pending
+        )
+        cell.clicked.connect(lambda i=index: self.vm.select_edit_habit(i))
+        return cell
+
+    def _refresh_bottom_panels(self):
+        """Show/hide info panel and edit control bar based on mode."""
+        # Info panel
+        if self.vm.info_mode:
+            self._info_panel.show()
+            self._info_panel.update_habit(self.vm.selected_info_habit)
+        else:
+            self._info_panel.hide()
+
+        # Edit control bar
+        if self.vm.edit_mode:
+            self._edit_bar_scroll.show()
+            self._edit_bar.show()
+
+            # Determine selection state
+            selected_idx = self.vm.selected_edit_index
+            habits = self.vm.habits
+            selected_habit = None
+            selected_name = None
+            selected_raw_count = 0
+            is_placeholder = False
+
+            if selected_idx >= 0:
+                if selected_idx < len(habits):
+                    selected_habit = habits[selected_idx]
+                    selected_name = selected_habit.name if selected_habit.name else None
+                    selected_raw_count = selected_habit.raw_today_count if selected_name else 0
+                    is_placeholder = not selected_name
+                else:
+                    is_placeholder = True
+
+            self._edit_bar.update_state(
+                selected_index=selected_idx,
+                selected_habit_name=selected_name,
+                selected_raw_count=selected_raw_count,
+                is_placeholder=is_placeholder,
+                move_pending=self.vm.move_pending_source_index >= 0,
+                habit_screens=self.vm.habit_screens,
+                active_screen_index=self.vm.active_screen_index,
+                max_one_habits=self.vm.settings.max_one_habits,
+                custom_input_habits=self.vm.settings.custom_input_habits,
+                text_input_habits=self.vm.settings.text_input_habits,
+                text_input_options_habits=self.vm.settings.text_input_options_habits,
+                text_input_file_uris=self.vm.settings.text_input_file_uris,
+                dated_entry_habits=self.vm.settings.dated_entry_habits,
+                dated_entry_file_uris=self.vm.settings.dated_entry_file_uris,
+                habit_dividers=self.vm.settings.habit_dividers
+            )
+        else:
+            self._edit_bar.hide()
+            self._edit_bar_scroll.hide()
+
+    # ── Click handlers ─────────────────────────────────────────────────────────
+
+    def _on_habit_clicked(self, habit: Habit, index: int):
+        """Handle a habit button click — behavior depends on current mode."""
+        if self.vm.edit_mode:
+            self.vm.select_edit_habit(index)
+        elif self.vm.info_mode:
+            self.vm.select_info_habit(habit)
+        elif habit.name in self.vm.settings.text_input_habits:
+            self._show_text_input_dialog(habit)
+        elif habit.use_custom_input:
+            self._show_increment_dialog(habit)
+        else:
+            self.vm.increment_habit(habit.name, 1)
+
+    def _on_habit_long_clicked(self, habit: Habit):
+        """Handle double-click (long press equivalent) — toggle custom input."""
+        if not self.vm.info_mode and not self.vm.edit_mode:
+            self.vm.toggle_custom_input(habit.name)
+
+    def _show_increment_dialog(self, habit: Habit):
+        """Show the custom increment dialog."""
+        amount = IncrementDialog.get_amount(habit.name, habit.today_count, self)
+        if amount is not None:
+            self.vm.increment_habit(habit.name, amount)
+
+    def _show_text_input_dialog(self, habit: Habit):
+        """Show the text input dialog."""
+        show_opts = habit.name in self.vm.settings.text_input_options_habits
+        options = []
+        if show_opts:
+            # Load past entries from the text input file
+            file_path = self.vm.settings.text_input_file_uris.get(habit.name)
+            if file_path and os.path.exists(file_path):
+                try:
+                    with open(file_path, 'r') as f:
+                        options = [line.strip() for line in f.readlines() if line.strip()]
+                    # Deduplicate and reverse (most recent first)
+                    seen = set()
+                    unique = []
+                    for opt in reversed(options):
+                        if opt not in seen:
+                            seen.add(opt)
+                            unique.append(opt)
+                    options = unique
+                except Exception:
+                    pass
+
+        text = TextInputDialog.get_text(habit.name, show_opts, options, self)
+        if text is not None:
+            # Save text entry to file
+            file_path = self.vm.settings.text_input_file_uris.get(habit.name)
+            if file_path:
+                try:
+                    with open(file_path, 'a') as f:
+                        f.write(text + '\n')
+                except Exception:
+                    pass
+            # Increment the habit
+            self.vm.increment_habit(habit.name, 1)
+
+    # ── Edit mode action handlers ──────────────────────────────────────────────
+
+    def _on_add_habit_requested(self):
+        """Show the add habit dialog."""
+        name = AddHabitDialog.get_name(self)
+        if name:
+            self.vm.add_habit(name, self.vm.selected_edit_index)
+
+    def _on_add_screen(self):
+        """Show the add screen dialog."""
+        name = AddScreenDialog.get_name(self)
+        if name:
+            self.vm.add_screen(name)
+
+    def _on_delete_screen(self):
+        """Delete the current screen (with confirmation if it has habits)."""
+        screen_idx = self.vm.active_screen_index
+        if screen_idx < 0 or screen_idx >= len(self.vm.habit_screens):
+            return
+        screen = self.vm.habit_screens[screen_idx]
+        habit_count = len([h for h in screen.habit_names if h])
+        if habit_count > 0:
+            reply = QMessageBox.question(
+                self, "Delete Screen",
+                f'Delete screen "{screen.name}"?\n\n'
+                f'{habit_count} habits will be moved to the first screen.',
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+            )
+            if reply != QMessageBox.Yes:
+                return
+        self.vm.delete_screen(screen_idx)
+
+    def _on_rename_screen(self, screen_index: int):
+        """Show the rename screen dialog."""
+        if screen_index < 0 or screen_index >= len(self.vm.habit_screens):
+            return
+        current_name = self.vm.habit_screens[screen_index].name
+        new_name = RenameScreenDialog.get_name(current_name, self)
+        if new_name:
+            self.vm.rename_screen(screen_index, new_name)
+
+    def _on_delete_habit(self, habit_name: str):
+        """Show delete habit confirmation dialog."""
+        if DeleteHabitConfirmDialog.confirm(habit_name, self):
+            # Find the index of this habit
+            for i, h in enumerate(self.vm.habits):
+                if h.name == habit_name:
+                    self.vm.delete_habit(i)
+                    break
+
+    def _on_change_icon(self, habit_name: str):
+        """Show the icon picker dialog."""
+        current_icon = self.vm.settings.habit_icons.get(habit_name)
+        if current_icon is None:
+            current_icon = get_habit_icon_name(habit_name)
+        new_icon = IconPickerDialog.pick_icon(habit_name, current_icon, self)
+        if new_icon != current_icon:
+            self.vm.set_habit_icon(habit_name, new_icon)
+
+    def _on_pick_text_input_file(self, habit_name: str):
+        """Open a file dialog to select a text input log file."""
+        path, _ = QFileDialog.getOpenFileName(
+            self, f"Select text log file for {habit_name}",
+            os.path.expanduser("~"),
+            "All Files (*)"
+        )
+        if path:
+            self.vm.set_text_input_file_uri(habit_name, path)
+
+    def _on_pick_dated_entry_file(self, habit_name: str):
+        """Open a file dialog to select a dated entry source file."""
+        path, _ = QFileDialog.getOpenFileName(
+            self, f"Select dated entry file for {habit_name}",
+            os.path.expanduser("~"),
+            "Text Files (*.txt *.md);;All Files (*)"
+        )
+        if path:
+            self.vm.set_dated_entry_file_uri(habit_name, path)
+
+    def _on_settings_clicked(self):
+        """Show a simple settings info message (desktop doesn't need file pickers like Android)."""
+        from habit_view_model import HABITSDB_PATH, SCREENS_RELAY_FILE
+        QMessageBox.information(
+            self, "Settings",
+            f"Database file:\n{HABITSDB_PATH}\n\n"
+            f"Screens relay file:\n{SCREENS_RELAY_FILE}\n\n"
+            f"Settings file:\n~/.config/py_habits_widget/settings.json"
+        )
 
 
-def get_icon_image_based_on_theme(current_theme):
-    if current_theme == "Moe-Dark":
-        icon_path = '/home/twain/Projects/py_habits_widget/icons/Screenshot_20231124_181238.png'
-    elif current_theme == "E5150-Orange":
-        icon_path = '/home/twain/Projects/py_habits_widget/icons/Screenshot_20231124_181238.png'
-    elif current_theme == "spectrum-mawsitsit":
-        icon_path = '/home/twain/Projects/py_habits_widget/icons/Screenshot_20231217_084422.png'
-    elif current_theme == "Shadows-Global":
-        icon_path = '/home/twain/Projects/py_habits_widget/icons/Screenshot_20231203_091003.png'
-    elif current_theme == "spectrum-strawberryquartz":
-        icon_path = '/home/twain/Projects/py_habits_widget/icons/Screenshot_20231124_181238.png'
-    elif current_theme == "Neon-Knights-Yellow":
-        icon_path = '/home/twain/Projects/py_habits_widget/icons/Screenshot_20231124_234618.png'
-    elif current_theme == "Glassy":
-        icon_path = '/home/twain/Projects/py_habits_widget/icons/Screenshot_20231124_181238.png'
-    return icon_path
+# ── Entry point ────────────────────────────────────────────────────────────────
+
+def main():
+    app = QApplication(sys.argv)
+    app.setApplicationName("Tail Habit Tracker")
+    apply_dark_theme(app)
+
+    widget = HabitGridWidget()
+    widget.show()
+
+    sys.exit(app.exec_())
 
 
 if __name__ == '__main__':
-    app = QApplication(sys.argv)
-    app.setApplicationName("py_habits_widget")
-    app.setApplicationDisplayName("Habit Tracker Widget")
-    app.setDesktopFileName("py_habits_widget.desktop")
-
-    icon_path = '/home/twain/Projects/py_habits_widget/icons/blue_icon.png'
-    app_icon = QIcon(icon_path)
-    app.setWindowIcon(app_icon)
-
-    icon_grid = IconGrid()
-    icon_grid.setWindowIcon(app_icon)
-    icon_grid.setWindowTitle('Habit Tracker Widget')
-    icon_grid.setProperty("WM_CLASS", "py_habits_widget")
-
-    sys.exit(app.exec_())
+    main()
