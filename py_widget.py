@@ -32,6 +32,7 @@ from habit_button import HabitButton, PlaceholderCell, CELL_SIZE
 from habit_colors import get_habit_icon_name
 from info_panel import HabitInfoPanel
 from edit_control_bar import EditModeControlBar
+from graphs_panel import GraphsPanel
 from dialogs import (
     IncrementDialog, TextInputDialog, AddScreenDialog,
     RenameScreenDialog, AddHabitDialog, DeleteHabitConfirmDialog,
@@ -161,7 +162,13 @@ class HabitGridWidget(QWidget):
         self._info_panel.hide()
         root.addWidget(self._info_panel)
 
-        # 5. Edit control bar (hidden by default)
+        # 5. Graphs panel (hidden by default, shown when graph mode is active)
+        self._graphs_panel = GraphsPanel(self.vm)
+        self._graphs_panel.hide()
+        self._graphs_panel.setMaximumHeight(320)
+        root.addWidget(self._graphs_panel)
+
+        # 6. Edit control bar (hidden by default)
         self._edit_bar = EditModeControlBar()
         self._edit_bar.hide()
         self._connect_edit_bar_signals()
@@ -206,6 +213,14 @@ class HabitGridWidget(QWidget):
         layout.addWidget(self._btn_next_day)
 
         layout.addStretch()
+
+        # Graph mode toggle (📊) — matches Android's BarChart icon button
+        self._btn_graph = QPushButton("📊")
+        self._btn_graph.setFixedSize(36, 36)
+        self._btn_graph.setToolTip("Graph mode")
+        self._btn_graph.setStyleSheet(self._icon_btn_style())
+        self._btn_graph.clicked.connect(self.vm.toggle_graph_mode)
+        layout.addWidget(self._btn_graph)
 
         # Edit mode toggle
         self._btn_edit = QPushButton("✏")
@@ -307,6 +322,13 @@ class HabitGridWidget(QWidget):
             self._date_label.setStyleSheet("color: #FFD700; font-size: 14px; font-weight: bold;")
 
         self._btn_next_day.setEnabled(not is_today)
+
+        # Graph button highlight — light blue when active, matching Android's Color(0xFF4FC3F7)
+        if self.vm.graph_mode:
+            self._btn_graph.setStyleSheet(self._icon_btn_style(
+                active=True, active_color="#4FC3F7", active_bg="#0A2A4A"))
+        else:
+            self._btn_graph.setStyleSheet(self._icon_btn_style())
 
         # Edit button highlight
         if self.vm.edit_mode:
@@ -423,11 +445,14 @@ class HabitGridWidget(QWidget):
         is_info_selected = (self.vm.info_mode and self.vm.selected_info_habit is not None
                             and self.vm.selected_info_habit.name == habit.name)
         is_move_source = self.vm.edit_mode and index == self.vm.move_pending_source_index
+        is_graph_selected = self.vm.graph_mode and habit.name in self.vm.graph_selected_habits
 
         btn.set_modes(
             info_mode=self.vm.info_mode,
             edit_mode=self.vm.edit_mode,
+            graph_mode=self.vm.graph_mode,
             is_selected=is_edit_selected or is_info_selected,
+            is_graph_selected=is_graph_selected,
             is_move_pending_source=is_move_source,
             is_move_pending_target=is_move_pending and not is_move_source and self.vm.edit_mode
         )
@@ -450,13 +475,20 @@ class HabitGridWidget(QWidget):
         return cell
 
     def _refresh_bottom_panels(self):
-        """Show/hide info panel and edit control bar based on mode."""
+        """Show/hide info panel, graphs panel, and edit control bar based on mode."""
         # Info panel
         if self.vm.info_mode:
             self._info_panel.show()
             self._info_panel.update_habit(self.vm.selected_info_habit)
         else:
             self._info_panel.hide()
+
+        # Graphs panel — shown when graph mode is active
+        if self.vm.graph_mode:
+            self._graphs_panel.show()
+            self._graphs_panel.refresh()
+        else:
+            self._graphs_panel.hide()
 
         # Edit control bar
         if self.vm.edit_mode:
@@ -505,7 +537,10 @@ class HabitGridWidget(QWidget):
 
     def _on_habit_clicked(self, habit: Habit, index: int):
         """Handle a habit button click — behavior depends on current mode."""
-        if self.vm.edit_mode:
+        if self.vm.graph_mode:
+            # In graph mode, clicking a habit toggles its selection for graphing
+            self.vm.toggle_graph_habit_selection(habit.name)
+        elif self.vm.edit_mode:
             self.vm.select_edit_habit(index)
         elif self.vm.info_mode:
             self.vm.select_info_habit(habit)
@@ -518,7 +553,7 @@ class HabitGridWidget(QWidget):
 
     def _on_habit_long_clicked(self, habit: Habit):
         """Handle double-click (long press equivalent) — toggle custom input."""
-        if not self.vm.info_mode and not self.vm.edit_mode:
+        if not self.vm.info_mode and not self.vm.edit_mode and not self.vm.graph_mode:
             self.vm.toggle_custom_input(habit.name)
 
     def _show_increment_dialog(self, habit: Habit):

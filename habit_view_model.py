@@ -38,6 +38,9 @@ class HabitViewModel:
         self.selected_date: date = date.today()
         self.info_mode: bool = False
         self.edit_mode: bool = False
+        self.graph_mode: bool = False
+        self.graph_selected_habits: set = set()
+        self.graph_time_period: str = "1M"  # default: 1 month
         self.selected_info_habit: Optional[Habit] = None
         self.selected_edit_index: int = -1
         self.move_pending_source_index: int = -1
@@ -213,7 +216,57 @@ class HabitViewModel:
         else:
             self.info_mode = False
             self.selected_info_habit = None
+            self.graph_mode = False
+            self.graph_selected_habits = set()
         self._notify()
+
+    def toggle_graph_mode(self):
+        """Toggle graph mode on/off, matching Android's toggleGraphMode()."""
+        turning_on = not self.graph_mode
+        self.graph_mode = turning_on
+        if turning_on:
+            # Deactivate other modes
+            self.info_mode = False
+            self.selected_info_habit = None
+            self.edit_mode = False
+            self.selected_edit_index = -1
+            self.move_pending_source_index = -1
+        else:
+            self.graph_selected_habits = set()
+        self._notify()
+
+    def toggle_graph_habit_selection(self, habit_name: str):
+        """Toggle a habit's selection for graphing, matching Android's toggleGraphHabitSelection()."""
+        if habit_name in self.graph_selected_habits:
+            self.graph_selected_habits.discard(habit_name)
+        else:
+            self.graph_selected_habits.add(habit_name)
+        self._notify()
+
+    def set_graph_time_period(self, period: str):
+        """Set the graph time period (e.g. '1W', '2W', '1M', '3M', '6M', '1Y', 'Max')."""
+        self.graph_time_period = period
+        self._notify()
+
+    def get_graph_data(self, habit_name: str, start_date: date, end_date: date) -> list:
+        """
+        Returns list of (date_str, value) tuples for a habit in the given date range.
+        Matches Android's getGraphData().
+        """
+        from habit_calculator import build_habit
+        entries = self.cached_db.get(habit_name, {})
+        divider = self.settings.habit_dividers.get(habit_name, 1)
+        result = []
+        current = start_date
+        while current <= end_date:
+            ds = current.strftime('%Y-%m-%d')
+            raw = entries.get(ds, 0)
+            # Apply divider (same as applyDivider in Android)
+            value = raw // divider if divider > 1 else raw
+            result.append((ds, value))
+            from datetime import timedelta
+            current += timedelta(days=1)
+        return result
 
     def select_info_habit(self, habit: Habit):
         """Select a habit for info display, computing full stats on demand."""

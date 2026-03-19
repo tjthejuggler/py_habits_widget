@@ -25,9 +25,9 @@ from habit_colors import get_habit_color, get_habit_icon_path
 
 # Cell size: Android uses aspectRatio(1f) in an 8-column grid.
 # On a typical phone (~360dp wide), each cell is ~43dp.
-# On desktop we use 70px for comfortable readability.
-CELL_SIZE = 70
-ICON_SIZE = 28  # Android uses 20.dp; scaled up proportionally for 70px cells
+# On desktop we use 60px so the full 8×10 grid fits without scrolling.
+CELL_SIZE = 60
+ICON_SIZE = 24  # Android uses 20.dp; scaled proportionally for 60px cells
 
 # Global cache for white-tinted icon pixmaps (shared across all HabitButton instances)
 _white_icon_cache: Dict[str, QPixmap] = {}
@@ -63,7 +63,9 @@ class HabitButton(QWidget):
         self.habit = habit
         self.info_mode = False
         self.edit_mode = False
+        self.graph_mode = False
         self.is_selected = False
+        self.is_graph_selected = False
         self.is_move_pending_source = False
         self.is_move_pending_target = False
         self.custom_icon_overrides: Dict[str, str] = {}
@@ -79,11 +81,15 @@ class HabitButton(QWidget):
         self.update()
 
     def set_modes(self, info_mode: bool = False, edit_mode: bool = False,
-                  is_selected: bool = False, is_move_pending_source: bool = False,
+                  graph_mode: bool = False,
+                  is_selected: bool = False, is_graph_selected: bool = False,
+                  is_move_pending_source: bool = False,
                   is_move_pending_target: bool = False):
         self.info_mode = info_mode
         self.edit_mode = edit_mode
+        self.graph_mode = graph_mode
         self.is_selected = is_selected
+        self.is_graph_selected = is_graph_selected
         self.is_move_pending_source = is_move_pending_source
         self.is_move_pending_target = is_move_pending_target
         self.update()
@@ -167,6 +173,14 @@ class HabitButton(QWidget):
         elif self.is_selected:
             painter.setPen(QPen(QColor(0xFF, 0xD7, 0x00), 2))
             painter.drawRoundedRect(QRectF(1, 1, w - 2, h - 2), radius, radius)
+        elif self.is_graph_selected:
+            # Light blue border matching Android's Color(0xFF4FC3F7)
+            painter.setPen(QPen(QColor(0x4F, 0xC3, 0xF7), 2))
+            painter.drawRoundedRect(QRectF(1, 1, w - 2, h - 2), radius, radius)
+        elif self.graph_mode:
+            # Dim blue border matching Android's Color(0xFF2A4A6A)
+            painter.setPen(QPen(QColor(0x2A, 0x4A, 0x6A), 1))
+            painter.drawRoundedRect(QRectF(1, 1, w - 2, h - 2), radius, radius)
         elif self.info_mode:
             painter.setPen(QPen(QColor(0x88, 0xCC, 0xFF), 1))
             painter.drawRoundedRect(QRectF(1, 1, w - 2, h - 2), radius, radius)
@@ -174,13 +188,13 @@ class HabitButton(QWidget):
             painter.setPen(QPen(QColor(0xFF, 0x8C, 0x00), 1))
             painter.drawRoundedRect(QRectF(1, 1, w - 2, h - 2), radius, radius)
 
-        # Font for numbers — Android uses 9.sp
-        small_font = QFont("Arial", 8)
+        # Font for numbers — Android uses 9.sp; 7pt fits well in 60px cells
+        small_font = QFont("Arial", 7)
         small_font.setBold(True)
         painter.setFont(small_font)
 
         text_margin = 2
-        text_h = 13  # height for text rows
+        text_h = 11  # height for text rows
 
         # Top-left: all-time high day
         painter.setPen(QColor(Qt.white))
@@ -201,6 +215,11 @@ class HabitButton(QWidget):
             painter.setPen(QColor(0x88, 0xCC, 0xFF))
             painter.drawText(QRect(text_margin, 0, w - text_margin * 2, text_h),
                              Qt.AlignRight | Qt.AlignTop, "ℹ")
+        elif self.is_graph_selected:
+            # 📊 badge in top-right when selected for graphing
+            painter.setPen(QColor(0x4F, 0xC3, 0xF7))
+            painter.drawText(QRect(text_margin, 0, w - text_margin * 2, text_h),
+                             Qt.AlignRight | Qt.AlignTop, "📊")
         elif habit.use_custom_input:
             painter.setPen(QColor(Qt.yellow))
             painter.drawText(QRect(text_margin, 0, w - text_margin * 2, text_h),
