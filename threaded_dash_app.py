@@ -37,7 +37,7 @@ def make_json(directory):
 
 def generate_chart(chart_prompt):
     # Load and merge both habitsdb files
-    habitsdb = make_json(obsidian_dir+'habitsdb.txt')
+    habitsdb = make_json(os.path.expanduser('~/habitsdb/habitsdb.txt'))
     habitsdb_phone = make_json(obsidian_dir+'habitsdb_phone.txt')
     habitsdb_to_add = make_json(obsidian_dir+'habitsdb_to_add.txt')
     

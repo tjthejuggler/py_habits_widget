@@ -59,7 +59,7 @@ def calculate_habit_stats(dates_dict):
 try:
     # Read the contents of habitsdb.txt
     print("\nReading habitsdb.txt...")
-    with open('/home/twain/noteVault/habitsdb.txt', 'r') as db_file:
+    with open('/home/twain/habitsdb/habitsdb.txt', 'r') as db_file:
         db_data = json.load(db_file)
     print(f"Found {len(db_data)} habits in main database")
 

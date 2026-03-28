@@ -21,7 +21,7 @@ import settings_repository as settings_repo
 with open(os.path.expanduser('~/Projects/py_habits_widget/obsidian_dir.txt'), 'r') as f:
     OBSIDIAN_DIR = f.read().strip()
 
-HABITSDB_PATH = OBSIDIAN_DIR + 'habitsdb.txt'
+HABITSDB_PATH = os.path.expanduser('~/habitsdb/habitsdb.txt')
 SCREENS_RELAY_FILE = os.path.expanduser('~/noteVault/tail/screens_layout.json')
 
 TOTAL_GRID_CELLS = 80

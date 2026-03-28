@@ -10,7 +10,7 @@ def make_json(directory):
 with open('/home/twain/Projects/tail/obsidian_dir.txt', 'r') as f:
     obsidian_dir = f.read().strip()
 
-habitsdb = make_json(obsidian_dir+'habitsdb.txt')
+habitsdb = make_json(os.path.expanduser('~/habitsdb/habitsdb.txt'))
 habitsdb_to_add = make_json(obsidian_dir+'habitsdb_to_add.txt')
 
 #activities is the list of keys from habitsdb

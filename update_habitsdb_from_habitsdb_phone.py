@@ -16,7 +16,7 @@ import os
 from datetime import date, timedelta
 
 OBSIDIAN_DIR = os.path.expanduser('~/noteVault/')
-HABITSDB_PATH = OBSIDIAN_DIR + 'habitsdb.txt'
+HABITSDB_PATH = os.path.expanduser('~/habitsdb/habitsdb.txt')
 PHONE_PATH    = OBSIDIAN_DIR + 'habitsdb_phone.txt'
 
 TODAY = date.today()

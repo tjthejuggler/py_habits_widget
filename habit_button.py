@@ -26,8 +26,8 @@ from habit_colors import get_habit_color, get_habit_icon_path
 # Cell size: Android uses aspectRatio(1f) in an 8-column grid.
 # On a typical phone (~360dp wide), each cell is ~43dp.
 # On desktop we use 60px so the full 8×10 grid fits without scrolling.
-CELL_SIZE = 60
-ICON_SIZE = 24  # Android uses 20.dp; scaled proportionally for 60px cells
+CELL_SIZE = 109
+ICON_SIZE = 43  # Android uses 20.dp; scaled proportionally for 109px cells
 
 # Global cache for white-tinted icon pixmaps (shared across all HabitButton instances)
 _white_icon_cache: Dict[str, QPixmap] = {}
@@ -188,13 +188,13 @@ class HabitButton(QWidget):
             painter.setPen(QPen(QColor(0xFF, 0x8C, 0x00), 1))
             painter.drawRoundedRect(QRectF(1, 1, w - 2, h - 2), radius, radius)
 
-        # Font for numbers — Android uses 9.sp; 7pt fits well in 60px cells
-        small_font = QFont("Arial", 7)
+        # Font for numbers — Android uses 9.sp; 10pt fits well in 109px cells
+        small_font = QFont("Arial", 10)
         small_font.setBold(True)
         painter.setFont(small_font)
 
-        text_margin = 2
-        text_h = 11  # height for text rows
+        text_margin = 3
+        text_h = 16  # height for text rows
 
         # Top-left: all-time high day
         painter.setPen(QColor(Qt.white))

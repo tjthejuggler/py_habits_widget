@@ -54,7 +54,7 @@ def move_and_sort_data(phone_data, db_data):
 
 def main():
     phone_file_path = '/home/twain/noteVault/habitsdb_phone.txt'
-    db_file_path = '/home/twain/noteVault/habitsdb.txt'
+    db_file_path = '/home/twain/habitsdb/habitsdb.txt'
     
     phone_data = read_data(phone_file_path)
     db_data = read_data(db_file_path)

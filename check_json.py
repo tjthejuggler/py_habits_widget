@@ -10,7 +10,7 @@ def is_valid_json_file(filename):
     return True
 
 # Example usage
-filename = '/home/twain/noteVault/habitsdb.txt'
+filename = '/home/twain/habitsdb/habitsdb.txt'
 if is_valid_json_file(filename):
     print("Valid JSON file")
 else:

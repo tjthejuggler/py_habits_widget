@@ -28,7 +28,7 @@ def adjust_habit_count(count, habit_name):
         return count
             
 def output_habits_per_day():
-    habitsdb = make_json(obsidian_dir+'habitsdb.txt')
+    habitsdb = make_json(os.path.expanduser('~/habitsdb/habitsdb.txt'))
     habitsdb_phone = make_json(obsidian_dir+'habitsdb_phone.txt')
     
     # Merge habitsdb_phone into habitsdb
@@ -48,7 +48,7 @@ def output_habits_per_day():
                 f.write(f"{date_str}: {count}\n")
 
 # Load all database files
-habits = make_json(obsidian_dir+'habitsdb.txt')
+habits = make_json(os.path.expanduser('~/habitsdb/habitsdb.txt'))
 habitsdb_phone = make_json(obsidian_dir+'habitsdb_phone.txt')
 habitsdb_to_add = make_json(obsidian_dir+'habitsdb_to_add.txt')
 

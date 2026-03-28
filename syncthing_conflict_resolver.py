@@ -31,7 +31,7 @@ import argparse
 from datetime import date, timedelta
 
 NOTEVAULT = '/home/twain/noteVault'
-HABITSDB  = os.path.join(NOTEVAULT, 'habitsdb.txt')
+HABITSDB  = os.path.expanduser('~/habitsdb/habitsdb.txt')
 SCREENS   = os.path.join(NOTEVAULT, 'tail', 'screens_layout.json')
 
 POLL_INTERVAL = 10  # seconds between scans
