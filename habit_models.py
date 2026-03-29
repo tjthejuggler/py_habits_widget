@@ -91,9 +91,9 @@ class AppSettings:
 
 
 DEFAULT_CUSTOM_INPUT_HABITS: Set[str] = {
-    "Launch Pushups Widget",
-    "Launch Situps Widget",
-    "Launch Squats Widget",
+    "Pushups",
+    "Situps",
+    "Squats",
     "Cold Shower Widget",
     "Sweat"
 }
@@ -119,7 +119,7 @@ HABIT_ORDER: List[str] = [
     "Apnea walked", "Apnea practiced", "Apnea apb", "Apnea spb",
     "Lung stretch", "Sweat", "Fasted", "Todos done",
     # Row 7
-    "Cold Shower Widget", "Launch Squats Widget", "Launch Situps Widget", "Launch Pushups Widget",
+    "Cold Shower Widget", "Squats", "Situps", "Pushups",
     "Cardio sessions", "Good posture", "HIT", "Fresh air",
     # Row 8
     "Programming sessions", "Juggling tech sessions", "Writing sessions", "UC post",

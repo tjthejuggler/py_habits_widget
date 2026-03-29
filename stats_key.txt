@@ -41,9 +41,9 @@ Stats Key:
 185,186,187,188,189,190 Juggling tech sessions
 191,192,193,194,195,196 Kind stranger
 197,198,199,200,201,202 Language studied
-203,204,205,206,207,208 Launch Pushups Widget
-209,210,211,212,213,214 Launch Situps Widget
-215,216,217,218,219,220 Launch Squats Widget
+203,204,205,206,207,208 Pushups
+209,210,211,212,213,214 Situps
+215,216,217,218,219,220 Squats
 221,222,223,224,225,226 Lucidity trained
 227,228,229,230,231,232 Lung stretch
 233,234,235,236,237,238 Meditations

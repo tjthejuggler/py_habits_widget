@@ -162,7 +162,7 @@ icon = 'microscope';
 
 break;
 
-case 'Launch Situps Widget':
+case 'Situps':
 
 icon = 'animal_mouse1';
 
@@ -186,7 +186,7 @@ icon = 'ship_sc36';
 
 break;
 
-case 'Launch Pushups Widget':
+case 'Pushups':
 
 icon = 'animal_lizard1';
 
@@ -216,7 +216,7 @@ icon = 'bicycle';
 
 break;
 
-case 'Launch Squats Widget':
+case 'Squats':
 
 icon = 'animal_duck4';
 

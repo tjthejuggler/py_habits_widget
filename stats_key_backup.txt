@@ -202,24 +202,24 @@ Stats Key:
 200. Language studied % month
 201. Language studied % year
 202. Language studied % overall
-203. Launch Pushups Widget
-204. Launch Pushups Widget streak
-205. Launch Pushups Widget % week
-206. Launch Pushups Widget % month
-207. Launch Pushups Widget % year
-208. Launch Pushups Widget % overall
-209. Launch Situps Widget
-210. Launch Situps Widget streak
-211. Launch Situps Widget % week
-212. Launch Situps Widget % month
-213. Launch Situps Widget % year
-214. Launch Situps Widget % overall
-215. Launch Squats Widget
-216. Launch Squats Widget streak
-217. Launch Squats Widget % week
-218. Launch Squats Widget % month
-219. Launch Squats Widget % year
-220. Launch Squats Widget % overall
+203. Pushups
+204. Pushups streak
+205. Pushups % week
+206. Pushups % month
+207. Pushups % year
+208. Pushups % overall
+209. Situps
+210. Situps streak
+211. Situps % week
+212. Situps % month
+213. Situps % year
+214. Situps % overall
+215. Squats
+216. Squats streak
+217. Squats % week
+218. Squats % month
+219. Squats % year
+220. Squats % overall
 221. Lucidity trained
 222. Lucidity trained streak
 223. Lucidity trained % week

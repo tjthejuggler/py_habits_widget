@@ -202,24 +202,24 @@ Language studied % week
 Language studied % month
 Language studied % year
 Language studied % overall
-Launch Pushups Widget
-Launch Pushups Widget streak
-Launch Pushups Widget % week
-Launch Pushups Widget % month
-Launch Pushups Widget % year
-Launch Pushups Widget % overall
-Launch Situps Widget
-Launch Situps Widget streak
-Launch Situps Widget % week
-Launch Situps Widget % month
-Launch Situps Widget % year
-Launch Situps Widget % overall
-Launch Squats Widget
-Launch Squats Widget streak
-Launch Squats Widget % week
-Launch Squats Widget % month
-Launch Squats Widget % year
-Launch Squats Widget % overall
+Pushups
+Pushups streak
+Pushups % week
+Pushups % month
+Pushups % year
+Pushups % overall
+Situps
+Situps streak
+Situps % week
+Situps % month
+Situps % year
+Situps % overall
+Squats
+Squats streak
+Squats % week
+Squats % month
+Squats % year
+Squats % overall
 Lucidity trained
 Lucidity trained streak
 Lucidity trained % week

@@ -174,17 +174,17 @@
         "days_since_zero": 23,
         "longest_streak": 235
     },
-    "Launch Pushups Widget": {
+    "Pushups": {
         "days_since_not_zero": 1,
         "days_since_zero": 0,
         "longest_streak": 150
     },
-    "Launch Situps Widget": {
+    "Situps": {
         "days_since_not_zero": 7,
         "days_since_zero": 0,
         "longest_streak": 105
     },
-    "Launch Squats Widget": {
+    "Squats": {
         "days_since_not_zero": 5,
         "days_since_zero": 0,
         "longest_streak": 110
