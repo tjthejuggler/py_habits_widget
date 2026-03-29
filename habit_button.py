@@ -23,14 +23,13 @@ from typing import Optional, Dict
 from habit_models import Habit
 from habit_colors import get_habit_color, get_habit_icon_path
 
-# Cell size: Android uses aspectRatio(1f) in an 8-column grid.
+# Default cell size — used as fallback and for initial layout calculations.
 # On a typical phone (~360dp wide), each cell is ~43dp.
-# On desktop we use 60px so the full 8×10 grid fits without scrolling.
+# On desktop we use 109px so the full 8×10 grid fits without scrolling.
 CELL_SIZE = 109
-ICON_SIZE = 43  # Android uses 20.dp; scaled proportionally for 109px cells
 
-# Global cache for white-tinted icon pixmaps (shared across all HabitButton instances)
-_white_icon_cache: Dict[str, QPixmap] = {}
+# Global cache for white-tinted icon pixmaps keyed by (icon_path, size)
+_white_icon_cache: Dict[tuple, QPixmap] = {}
 
 
 def _tint_pixmap_white(pixmap: QPixmap) -> QPixmap:
@@ -38,12 +37,9 @@ def _tint_pixmap_white(pixmap: QPixmap) -> QPixmap:
     Apply a white color tint to a pixmap, matching Android's ColorFilter.tint(Color.White).
     This replaces all visible pixels with white while preserving the alpha channel.
     """
-    # Convert to QImage for pixel manipulation
     img = pixmap.toImage().convertToFormat(QImage.Format_ARGB32)
-    # Create a white image of the same size
     white_img = QImage(img.size(), QImage.Format_ARGB32)
     white_img.fill(Qt.white)
-    # Paint white using SourceIn composition: keeps alpha from destination, color from source
     painter = QPainter(img)
     painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
     painter.drawImage(0, 0, white_img)
@@ -54,13 +50,15 @@ def _tint_pixmap_white(pixmap: QPixmap) -> QPixmap:
 class HabitButton(QWidget):
     """
     A single habit cell widget matching the Android HabitButton composable.
+    Accepts a cell_size parameter so the grid can resize dynamically.
     """
     clicked = pyqtSignal()
     long_clicked = pyqtSignal()
 
-    def __init__(self, habit: Habit, parent=None):
+    def __init__(self, habit: Habit, cell_size: int = CELL_SIZE, parent=None):
         super().__init__(parent)
         self.habit = habit
+        self._cell_size = cell_size
         self.info_mode = False
         self.edit_mode = False
         self.graph_mode = False
@@ -69,15 +67,14 @@ class HabitButton(QWidget):
         self.is_move_pending_source = False
         self.is_move_pending_target = False
         self.custom_icon_overrides: Dict[str, str] = {}
-        self._cached_pixmap: Optional[QPixmap] = None
         self._last_icon_path: Optional[str] = None
-        self.setFixedSize(CELL_SIZE, CELL_SIZE)
+        self._last_icon_size: int = 0
+        self.setFixedSize(cell_size, cell_size)
         self.setCursor(Qt.PointingHandCursor)
 
     def update_habit(self, habit: Habit):
         """Update the habit data and repaint."""
         self.habit = habit
-        self._cached_pixmap = None  # invalidate icon cache
         self.update()
 
     def set_modes(self, info_mode: bool = False, edit_mode: bool = False,
@@ -96,7 +93,7 @@ class HabitButton(QWidget):
 
     def set_custom_icon_overrides(self, overrides: Dict[str, str]):
         self.custom_icon_overrides = overrides
-        self._cached_pixmap = None
+        self._last_icon_path = None  # invalidate cache
         self.update()
 
     def mousePressEvent(self, event):
@@ -109,34 +106,32 @@ class HabitButton(QWidget):
             self.long_clicked.emit()
         super().mouseDoubleClickEvent(event)
 
-    def _load_icon_pixmap(self) -> Optional[QPixmap]:
-        """Load, white-tint, and cache the icon pixmap."""
+    def _load_icon_pixmap(self, icon_size: int) -> Optional[QPixmap]:
+        """Load, white-tint, and cache the icon pixmap at the given size."""
         icon_path = get_habit_icon_path(self.habit.name, self.custom_icon_overrides)
-        if icon_path == self._last_icon_path and self._cached_pixmap is not None:
-            return self._cached_pixmap
+        cache_key = (icon_path, icon_size)
+
+        if (icon_path == self._last_icon_path and icon_size == self._last_icon_size
+                and cache_key in _white_icon_cache):
+            return _white_icon_cache[cache_key]
+
         self._last_icon_path = icon_path
+        self._last_icon_size = icon_size
+
         if icon_path is None:
-            self._cached_pixmap = None
             return None
 
-        # Check global white-tinted cache first
-        if icon_path in _white_icon_cache:
-            self._cached_pixmap = _white_icon_cache[icon_path]
-            return self._cached_pixmap
+        if cache_key in _white_icon_cache:
+            return _white_icon_cache[cache_key]
 
         pixmap = QPixmap(icon_path)
         if pixmap.isNull():
-            self._cached_pixmap = None
             return None
 
-        # Scale to ICON_SIZE, then tint white (like Android's ColorFilter.tint(Color.White))
-        scaled = pixmap.scaled(ICON_SIZE, ICON_SIZE, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        scaled = pixmap.scaled(icon_size, icon_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         white_pixmap = _tint_pixmap_white(scaled)
-
-        # Cache globally so other HabitButton instances reuse it
-        _white_icon_cache[icon_path] = white_pixmap
-        self._cached_pixmap = white_pixmap
-        return self._cached_pixmap
+        _white_icon_cache[cache_key] = white_pixmap
+        return white_pixmap
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -145,17 +140,21 @@ class HabitButton(QWidget):
         w, h = self.width(), self.height()
         habit = self.habit
 
+        # Scale font and icon proportionally to cell size
+        font_size = max(6, round(w * 10 / CELL_SIZE))
+        icon_size = max(12, round(w * 43 / CELL_SIZE))
+        text_h = max(10, round(w * 16 / CELL_SIZE))
+        text_margin = max(2, round(w * 3 / CELL_SIZE))
+
         # Background color based on today's count
         bg_color = get_habit_color(habit.name, habit.today_count)
 
-        # Adjust alpha for move states
         if self.is_move_pending_source:
             bg_color = QColor(bg_color.red(), bg_color.green(), bg_color.blue(), 128)
         elif self.is_move_pending_target:
             bg_color = QColor(bg_color.red(), bg_color.green(), bg_color.blue(), 178)
 
-        # Draw rounded rect background
-        radius = 6  # matching Android's RoundedCornerShape(6.dp)
+        radius = max(3, round(w * 6 / CELL_SIZE))
         path = QPainterPath()
         path.addRoundedRect(QRectF(0, 0, w, h), radius, radius)
         painter.fillPath(path, bg_color)
@@ -174,11 +173,9 @@ class HabitButton(QWidget):
             painter.setPen(QPen(QColor(0xFF, 0xD7, 0x00), 2))
             painter.drawRoundedRect(QRectF(1, 1, w - 2, h - 2), radius, radius)
         elif self.is_graph_selected:
-            # Light blue border matching Android's Color(0xFF4FC3F7)
             painter.setPen(QPen(QColor(0x4F, 0xC3, 0xF7), 2))
             painter.drawRoundedRect(QRectF(1, 1, w - 2, h - 2), radius, radius)
         elif self.graph_mode:
-            # Dim blue border matching Android's Color(0xFF2A4A6A)
             painter.setPen(QPen(QColor(0x2A, 0x4A, 0x6A), 1))
             painter.drawRoundedRect(QRectF(1, 1, w - 2, h - 2), radius, radius)
         elif self.info_mode:
@@ -188,13 +185,9 @@ class HabitButton(QWidget):
             painter.setPen(QPen(QColor(0xFF, 0x8C, 0x00), 1))
             painter.drawRoundedRect(QRectF(1, 1, w - 2, h - 2), radius, radius)
 
-        # Font for numbers — Android uses 9.sp; 10pt fits well in 109px cells
-        small_font = QFont("Arial", 10)
+        small_font = QFont("Arial", font_size)
         small_font.setBold(True)
         painter.setFont(small_font)
-
-        text_margin = 3
-        text_h = 16  # height for text rows
 
         # Top-left: all-time high day
         painter.setPen(QColor(Qt.white))
@@ -216,7 +209,6 @@ class HabitButton(QWidget):
             painter.drawText(QRect(text_margin, 0, w - text_margin * 2, text_h),
                              Qt.AlignRight | Qt.AlignTop, "ℹ")
         elif self.is_graph_selected:
-            # 📊 badge in top-right when selected for graphing
             painter.setPen(QColor(0x4F, 0xC3, 0xF7))
             painter.drawText(QRect(text_margin, 0, w - text_margin * 2, text_h),
                              Qt.AlignRight | Qt.AlignTop, "📊")
@@ -226,7 +218,7 @@ class HabitButton(QWidget):
                              Qt.AlignRight | Qt.AlignTop, "+")
 
         # Center: white-tinted icon
-        pixmap = self._load_icon_pixmap()
+        pixmap = self._load_icon_pixmap(icon_size)
         if pixmap is not None:
             x = (w - pixmap.width()) // 2
             y = (h - pixmap.height()) // 2
@@ -240,7 +232,7 @@ class HabitButton(QWidget):
                          Qt.AlignLeft | Qt.AlignBottom, streak_text)
 
         # Bottom-right: longest streak
-        painter.setPen(QColor(0xAD, 0xD8, 0xE6))  # light blue
+        painter.setPen(QColor(0xAD, 0xD8, 0xE6))
         painter.drawText(QRect(text_margin, h - text_h, w - text_margin * 2, text_h),
                          Qt.AlignRight | Qt.AlignBottom,
                          str(habit.longest_streak))
@@ -248,20 +240,22 @@ class HabitButton(QWidget):
         painter.end()
 
     def sizeHint(self):
-        return QSize(CELL_SIZE, CELL_SIZE)
+        return QSize(self._cell_size, self._cell_size)
 
 
 class PlaceholderCell(QWidget):
     """
     A placeholder cell shown in edit mode. Matches Android's PlaceholderCell composable.
+    Accepts a cell_size parameter so the grid can resize dynamically.
     """
     clicked = pyqtSignal()
 
-    def __init__(self, parent=None):
+    def __init__(self, cell_size: int = CELL_SIZE, parent=None):
         super().__init__(parent)
+        self._cell_size = cell_size
         self.is_selected = False
         self.is_move_pending_target = False
-        self.setFixedSize(CELL_SIZE, CELL_SIZE)
+        self.setFixedSize(cell_size, cell_size)
         self.setCursor(Qt.PointingHandCursor)
 
     def set_state(self, is_selected: bool = False, is_move_pending_target: bool = False):
@@ -300,7 +294,8 @@ class PlaceholderCell(QWidget):
             painter.setPen(QPen(QColor(0x44, 0xFF, 0xFF), 1))
             painter.drawRoundedRect(QRectF(1, 1, w - 2, h - 2), 4, 4)
 
-        font = QFont("Arial", 14 if (self.is_selected or self.is_move_pending_target) else 10)
+        font_size = max(8, round(w * 14 / CELL_SIZE))
+        font = QFont("Arial", font_size if (self.is_selected or self.is_move_pending_target) else max(6, round(w * 10 / CELL_SIZE)))
         painter.setFont(font)
         painter.setPen(text_color)
         painter.drawText(QRect(0, 0, w, h), Qt.AlignCenter, text)
@@ -308,4 +303,4 @@ class PlaceholderCell(QWidget):
         painter.end()
 
     def sizeHint(self):
-        return QSize(CELL_SIZE, CELL_SIZE)
+        return QSize(self._cell_size, self._cell_size)
