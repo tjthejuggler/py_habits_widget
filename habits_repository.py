@@ -32,11 +32,13 @@ def save_database(path: str, db: HabitsDatabase) -> None:
         json.dump(db, f, indent=4)
 
 
-def ensure_days_exist(path: str, today: Optional[date] = None) -> HabitsDatabase:
+def ensure_days_exist(path: str, today: Optional[date] = None, read_only: bool = False) -> HabitsDatabase:
     """
     Ensures every habit in the database has an entry for today.
     Only fills in the gap between the latest recorded date and today for each habit.
     Returns the updated database (and saves it if any dates were added).
+
+    When read_only=True, fills missing days in memory but does NOT write to disk.
     """
     if today is None:
         today = date.today()
@@ -65,7 +67,7 @@ def ensure_days_exist(path: str, today: Optional[date] = None) -> HabitsDatabase
                     any_added = True
                 cursor_date += timedelta(days=1)
 
-    if any_added:
+    if any_added and not read_only:
         save_database(path, db)
     return db
 

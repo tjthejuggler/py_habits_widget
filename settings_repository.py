@@ -44,7 +44,8 @@ def load_settings() -> AppSettings:
         dated_entry_habits=set(data.get('dated_entry_habits', [])),
         dated_entry_file_uris=data.get('dated_entry_file_uris', {}),
         dated_entry_file_sizes=data.get('dated_entry_file_sizes', {}),
-        habit_dividers=data.get('habit_dividers', {})
+        habit_dividers=data.get('habit_dividers', {}),
+        read_only_mode=data.get('read_only_mode', False)
     )
 
 
@@ -72,7 +73,8 @@ def save_settings(settings: AppSettings) -> None:
         'dated_entry_habits': sorted(settings.dated_entry_habits),
         'dated_entry_file_uris': settings.dated_entry_file_uris,
         'dated_entry_file_sizes': settings.dated_entry_file_sizes,
-        'habit_dividers': settings.habit_dividers
+        'habit_dividers': settings.habit_dividers,
+        'read_only_mode': settings.read_only_mode
     }
 
     with open(SETTINGS_FILE, 'w') as f:
@@ -156,4 +158,10 @@ def save_dated_entry_file_uris(uris: dict) -> None:
 def save_dated_entry_file_sizes(sizes: dict) -> None:
     settings = load_settings()
     settings.dated_entry_file_sizes = sizes
+    save_settings(settings)
+
+
+def save_read_only_mode(enabled: bool) -> None:
+    settings = load_settings()
+    settings.read_only_mode = enabled
     save_settings(settings)

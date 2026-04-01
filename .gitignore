@@ -5,3 +5,5 @@ output.csv
 /bar_chart_race_videos
 *.mp4
 /py_habits_widget
+# Memory Bank (local AI context)
+memory-bank/

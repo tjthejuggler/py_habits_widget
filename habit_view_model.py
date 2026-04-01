@@ -82,7 +82,9 @@ class HabitViewModel:
             self._load_screens_from_relay()
 
         # Load database
-        self.cached_db = repo.ensure_days_exist(HABITSDB_PATH)
+        self.cached_db = repo.ensure_days_exist(
+            HABITSDB_PATH, read_only=self.settings.read_only_mode
+        )
         self._rebuild_habit_list()
 
     def _load_screens_from_relay(self):
@@ -154,8 +156,22 @@ class HabitViewModel:
 
     # ── Habit increment ────────────────────────────────────────────────────────
 
+    @property
+    def read_only(self) -> bool:
+        """Whether the widget is in read-only mode (no writes to habitsdb.txt)."""
+        return self.settings.read_only_mode
+
+    def toggle_read_only_mode(self):
+        """Toggle read-only mode and persist the setting."""
+        self.settings.read_only_mode = not self.settings.read_only_mode
+        settings_repo.save_read_only_mode(self.settings.read_only_mode)
+        self._notify()
+
     def increment_habit(self, habit_name: str, amount: int = 1):
-        """Increment a habit's count for the selected date."""
+        """Increment a habit's count for the selected date. No-op in read-only mode."""
+        if self.settings.read_only_mode:
+            return
+
         date_str = date_string(self.selected_date)
         current_entries = self.cached_db.get(habit_name, {})
         raw_new = (current_entries.get(date_str, 0)) + amount
@@ -180,7 +196,10 @@ class HabitViewModel:
         self._notify()
 
     def set_habit_count(self, habit_name: str, new_count: int):
-        """Set the count for a habit to an absolute value."""
+        """Set the count for a habit to an absolute value. No-op in read-only mode."""
+        if self.settings.read_only_mode:
+            return
+
         clamped = max(0, new_count)
         date_str = date_string(self.selected_date)
         current_entries = self.cached_db.get(habit_name, {})
@@ -495,9 +514,12 @@ class HabitViewModel:
             self.settings.habit_order = order
             settings_repo.save_habit_order(order)
 
-        # Add to database file
-        repo.add_habit_to_file(HABITSDB_PATH, trimmed)
-        self.cached_db = repo.ensure_days_exist(HABITSDB_PATH)
+        # Add to database file (skip disk write in read-only mode)
+        if not self.settings.read_only_mode:
+            repo.add_habit_to_file(HABITSDB_PATH, trimmed)
+        self.cached_db = repo.ensure_days_exist(
+            HABITSDB_PATH, read_only=self.settings.read_only_mode
+        )
         self._rebuild_habit_list()
         self._notify()
 
@@ -654,7 +676,9 @@ class HabitViewModel:
 
     def refresh(self):
         """Full refresh: reload database and rebuild."""
-        self.cached_db = repo.ensure_days_exist(HABITSDB_PATH)
+        self.cached_db = repo.ensure_days_exist(
+            HABITSDB_PATH, read_only=self.settings.read_only_mode
+        )
         self._load_screens_from_relay()
         self._rebuild_habit_list()
         self._notify()

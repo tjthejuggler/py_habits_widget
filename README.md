@@ -5,9 +5,9 @@ A PyQt5 desktop widget for the **Tail Habit Tracker**, mirroring the Android app
 ## Layout
 
 ```
-┌─────────────────────────────────────────────────────┐
-│  ◀  Today / date  ▶          [📊] [✏] [ℹ] [⚙]     │  ← Top bar
-├─────────────────────────────────────────────────────┤
+┌──────────────────────────────────────────────────────────┐
+│  ◀  Today / date  ▶       [📊] [✏] [ℹ] [🔒] [⚙]       │  ← Top bar
+├──────────────────────────────────────────────────────────┤
 │  [general]  [screen2]  [screen3]                    │  ← Screen tabs
 ├─────────────────────────────────────────────────────┤
 │                                                     │
@@ -70,3 +70,14 @@ The window is fully resizable. All grid cells, icons, and text scale proportiona
 *(Added 2026-03-29)*
 
 Window size and position are saved to `~/.config/py_habits_widget/window_geometry.json` on close and restored on next launch. The position is clamped to the available screen area so the window is never off-screen.
+
+## Read-Only Mode
+
+*(Added 2026-04-01)*
+
+A **read-only toggle** (🔒/🔓) in the top bar prevents the widget from writing to `~/habitsdb/habitsdb.txt`. This is useful when the file is synced from a phone via Syncthing and the desktop should only display data, not modify it.
+
+- **🔒 (red, active)** — Read-only ON: no writes to `habitsdb.txt`. `ensure_days_exist()` still fills missing days in memory for display, but never saves to disk. `increment_habit()` and `set_habit_count()` are no-ops.
+- **🔓 (default)** — Read-only OFF: normal read/write behavior (original behavior).
+
+The setting is persisted in `~/.config/py_habits_widget/settings.json` as `read_only_mode` and remembered across restarts.

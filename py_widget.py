@@ -329,6 +329,16 @@ class HabitGridWidget(QWidget):
         self._btn_info.clicked.connect(self.vm.toggle_info_mode)
         layout.addWidget(self._btn_info)
 
+        self._btn_read_only = QPushButton("🔒")
+        self._btn_read_only.setFixedSize(36, 36)
+        self._btn_read_only.setToolTip("Read-only mode (no writes to habitsdb)")
+        self._btn_read_only.setStyleSheet(self._icon_btn_style(
+            active=self.vm.read_only,
+            active_color="#FF6666", active_bg="#4A1A1A"
+        ))
+        self._btn_read_only.clicked.connect(self._on_toggle_read_only)
+        layout.addWidget(self._btn_read_only)
+
         self._btn_settings = QPushButton("⚙")
         self._btn_settings.setFixedSize(36, 36)
         self._btn_settings.setToolTip("Settings")
@@ -430,6 +440,16 @@ class HabitGridWidget(QWidget):
                 active=True, active_color="#88CCFF", active_bg="#1A4A7A"))
         else:
             self._btn_info.setStyleSheet(self._icon_btn_style())
+
+        if self.vm.read_only:
+            self._btn_read_only.setStyleSheet(self._icon_btn_style(
+                active=True, active_color="#FF6666", active_bg="#4A1A1A"))
+            self._btn_read_only.setText("🔒")
+            self._btn_read_only.setToolTip("Read-only mode ON (no writes to habitsdb)")
+        else:
+            self._btn_read_only.setStyleSheet(self._icon_btn_style())
+            self._btn_read_only.setText("🔓")
+            self._btn_read_only.setToolTip("Read-only mode OFF (writes enabled)")
 
     def _refresh_tab_row(self):
         """Rebuild the screen tab row."""
@@ -744,12 +764,18 @@ class HabitGridWidget(QWidget):
         if path:
             self.vm.set_dated_entry_file_uri(habit_name, path)
 
+    def _on_toggle_read_only(self):
+        """Toggle read-only mode for the habitsdb file."""
+        self.vm.toggle_read_only_mode()
+
     def _on_settings_clicked(self):
         """Show a simple settings info message."""
         from habit_view_model import HABITSDB_PATH, SCREENS_RELAY_FILE
+        ro_status = "ON 🔒" if self.vm.read_only else "OFF 🔓"
         QMessageBox.information(
             self, "Settings",
             f"Database file:\n{HABITSDB_PATH}\n\n"
+            f"Read-only mode: {ro_status}\n\n"
             f"Screens relay file:\n{SCREENS_RELAY_FILE}\n\n"
             f"Settings file:\n~/.config/py_habits_widget/settings.json\n\n"
             f"Window geometry:\n{GEOMETRY_FILE}"

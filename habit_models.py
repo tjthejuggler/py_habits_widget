@@ -88,6 +88,7 @@ class AppSettings:
     dated_entry_file_uris: Dict[str, str] = field(default_factory=dict)
     dated_entry_file_sizes: Dict[str, int] = field(default_factory=dict)
     habit_dividers: Dict[str, int] = field(default_factory=dict)
+    read_only_mode: bool = False
 
 
 DEFAULT_CUSTOM_INPUT_HABITS: Set[str] = {
