@@ -81,3 +81,150 @@ A **read-only toggle** (🔒/🔓) in the top bar prevents the widget from writi
 - **🔓 (default)** — Read-only OFF: normal read/write behavior (original behavior).
 
 The setting is persisted in `~/.config/py_habits_widget/settings.json` as `read_only_mode` and remembered across restarts.
+
+## PC Floating Bubble Widget
+
+*(Added 2026-08-18; switched to Tail Bridge transport same day)*
+
+`pc_bubble_widget.py` is a small frameless always-on-top circle with the tail
+icon, draggable anywhere on screen, with one habit square per habit toggled
+**"PC widget"** in the phone app's edit mode. Clicking a square starts that
+habit's timer; clicking again stops it and queues an event (duration + the
+real start time) for the phone. Lives in the system tray — no taskbar entry;
+tray click or menu recalls the bubble next to the tray.
+
+- **Run:** `./start_pc_bubble.sh` (uses the project venv)
+- **Transport:** the local **Tail Bridge** (`http://127.0.0.1:8001`) — the
+  same FastAPI server that serves the Garmin proxy data and the movie cache.
+  Zero setup: the auth token is auto-resolved from the environment or the
+  bridge's `.env` file, and the phone derives the bridge URL from its Garmin
+  settings, exactly like the movie-bridge feature. Endpoints:
+  - `GET/POST /api/v1/pc_widget/config` (phone → PC) — habit squares to show
+  - `POST /api/v1/pc_widget/event` (PC → phone) — queue one event
+    (the bridge assigns the ID — it is the single writer of its state)
+  - `GET /api/v1/pc_widget/events` (PC) — events not yet acked
+  - `POST /api/v1/pc_widget/acks` (phone → PC) — acks; the bridge prunes
+- **Delivery:** at-least-once + acks = effectively-once. Events queued while
+  the phone is offline deliver on its next poll (the phone polls the bridge
+  every 45 s while its bubble service runs). Orange dot on a square =
+  queued; green flash = phone confirmed. If the bridge is down the widget
+  keeps its squares and badges and shows a write-failure flash.
+- **Tooltips** (custom, per-widget — 2026-08-19): each habit square shows its
+  *own* hover message — habit name, its count for today ("today: 23 min" /
+  "today: 3 pts" — unit follows the habit's minutes-primary setting), and —
+  while a dot is showing — what it's reporting ("waiting for the phone to
+  sync" / "phone confirmed ✓"). Hovering the **center bubble only** shows the
+  summary: today's total points plus the 7-day and 30-day daily averages.
+  These are *not* Qt built-in tooltips: Qt's receiver tracking goes stale when
+  squares glide under a stationary cursor (the container's text kept winning,
+  so one message appeared for the whole widget). Instead the bubble's own
+  Enter/Leave tracking drives a custom `BubbleToolTip` window (600 ms hover
+  delay, hidden on leave/click/drag/menu). Numbers come from
+  `pc_widget_stats.py`, which reads the Syncthing-synced
+  `~/habitsdb/habitsdb.txt` (mtime-cached, so it re-reads only when the
+  phone's copy syncs over).
+- **Session semantics** mirror the phone's bubble timer: ≥1 min → +1 session
+  AND +minutes on the habit's secondary value; <1 min → simple +1 tap.
+  Timestamps are recorded at the event's own start time on the phone.
+- **State** (bubble position + running timers) persists across restarts in
+  `~/.config/pc_bubble_widget/state.json`.
+- **Single instance** guard via a local socket (`pc-bubble-widget-singleton`).
+- `pc_widget_sync.py` is the Qt-free HTTP IO module (stdlib urllib only,
+  never raises on transport errors) — smoke-testable standalone with
+  `pc_widget_smoke_test.py` (spins up an in-process fake bridge + offscreen
+  Qt widget and checks the full config → tap → ack → prune round-trip).
+- **KDE/Wayland notes** (fixed 2026-08-18): Qt/Wayland ignores absolute
+  `move()` and doesn't implement `WindowStaysOnTopHint`, so —
+  - dragging uses compositor-driven moves (`QWindow.startSystemMove()`);
+    manual offset dragging remains the X11 fallback.
+  - keep-above is enforced by a tiny KWin script the widget auto-loads via
+    DBus at startup (`~/.config/pc_bubble_widget/keep_above_v3.js`, matches the
+    window titles "Tail PC Widget" / "Tail PC Widget Flash" /
+    "Tail PC Widget Tip"). It re-applies to windows added later in the
+    session; silently no-ops on non-KDE.
+  - "Recall bubble to tray" starts an interactive compositor move on
+    Wayland (clients cannot position themselves) — one drag flings it back.
+
+## PC Bubble Widget — Proximity Ring & Backdating
+
+*(Added 2026-08-19)*
+
+- **Ring layout:** idle squares tuck in deep **behind** the bubble while the
+  mouse is away; **running timers always stay out at rest radius** (a 4 px
+  sliver of a gap to the bubble) so they remain prominent. When the cursor
+  moves over the widget the whole ring spreads out (radius sized so every
+  square gets a non-overlapping clickable slot) and glides back when it
+  leaves. Spread detection is Wayland-safe: Enter/Leave events on the
+  container + squares drive it (120 ms debounce for container↔square
+  transitions, and a pin keeps the ring out while a context menu is open).
+  On X11 a 40 ms cursor poll additionally spreads the ring a square-width
+  *before* the pointer enters the window — Wayland clients cannot query the
+  global cursor (`QCursor.pos()` freezes outside our windows, which is why
+  pure polling "only worked once"). Easing runs at ~60 Hz on a
+  self-stopping QTimer.
+- **Black-hole collapse** *(2026-08-19)*: the center circle is now its own
+  child widget (`BubbleCore`) stacked **above** the squares, so tucked
+  squares collapse *behind* it — and as they tuck, the side nearest the
+  center is squeezed and faded strip-by-strip (a pinch warp rendered with
+  `SmoothPixmapTransform`, applied to the whole square body — rounded rect,
+  icon, dots — so the icons warp too). Strips stay axis-aligned, so the
+  content never rotates — only the squeeze direction follows the ring. The
+  squeeze/fade follows the animated ring radius, so the morph plays on every
+  collapse/expand. `BubbleCore` is `WA_TransparentForMouseEvents`: clicks,
+  drags and hover over the middle keep flowing to the container exactly as
+  before.
+- **Android-matched habit colours** *(2026-08-19)*: each square's
+  background (and border rings) mirrors the phone app's habit-button style
+  for that habit's **effective points** today — the exact `getHabitStyle`
+  ladder of `ui/HabitColors.kt`: 0-5 solid muted backgrounds (red → orange
+  → green → blue → pink → yellow), 6 glass, 7-12 glass + single vivid
+  border cycling Red→Yellow, 13-48 glass + double vivid border (outer |
+  black | inner, capped at 49). Mirrored Qt-free in `pc_widget_stats.py`
+  (`habit_style`); effective points mirror the phone's
+  `effectivePointsForDate` (see the next bullet).
+- **Bigger tail icon** *(2026-08-19)*: the tail image in the center circle
+  now spans the circle's inner diameter (its edge touches the inner edge of
+  the circle) instead of floating smaller inside.
+- **Effective points, not raw counts** *(2026-08-19)*: square colours and
+  the tooltip's today/week/month numbers are now the points the phone
+  itself shows — `HabitViewModel.effectivePointsForDate` mirrored in
+  `pc_widget_stats.py`: minutes-primary habits score their
+  `minutes:<habit>` slot through the divider (session count standing in on
+  zero-minute days), other habits score raw/divider, inverted-binary
+  habits score 1 when not done, `noPointsHabits`/`disabledHabits` score
+  nothing, and auxiliary `minutes:`/`secondary_value*:` slots are never
+  summed as habits (raw minutes had inflated the totals ~10×). Per-habit
+  config comes from the bridge config's `divider` field (consumed as soon
+  as the phone sends it), a user overrides file
+  (`~/.config/pc_bubble_widget/point_overrides.json`), or the newest
+  parseable tail backup's settings block (`~/habitsdb/Auto_backups/`
+  daily, `Manual_backups/` — mid-sync files are skipped), defaulting to
+  divider 30 for minutes-primary habits.
+- **Wayland hover recovery + tooltips at the cursor** *(2026-08-19)*:
+  after a compositor drag (`startSystemMove`) Qt can miss Leave events,
+  which used to wedge the ring spread on forever; drags now reset the
+  hover state, mouse tracking lets plain motion over the widget re-arm
+  hover when no Enter ever fires, and a presence watchdog drops hover when
+  the cursor reading has been frozen for 3 s outside the window. Tooltips
+  switched from our own top-level window (whose `move()` KWin ignores —
+  it kept appearing at the spawn point) to `QToolTip` popups, which the
+  platform anchors right at the cursor; each square still gets its own
+  message via our enter/leave targeting.
+- **Dragging:** left-drag anywhere on the widget moves it — from the bubble
+  directly, or from any square. Squares disambiguate click vs drag: under
+  8 px of movement = a click (toggles the timer on release), 8 px or more =
+  the whole widget follows the pointer (compositor-driven move on Wayland).
+  This matters because the tucked idle squares cover the bubble at rest.
+- **Right-click a habit square** → per-habit menu with a repeatable
+  **"⏪ Started 1 min earlier"** action: each click pulls the running
+  timer's start another minute into the past (the label shows the resulting
+  start clock time, and the menu stays open for repeated clicks). The
+  backdated start is what gets synced to the phone, and it persists across
+  restarts.
+- **Tray-only presence:** the KWin startup script now also sets
+  `skipTaskbar` on the widget's windows (KDE/Wayland), and the app plus its
+  windows carry the tail icon, so any DE that insists on a taskbar entry at
+  least shows the right icon.
+- Running timers are restored as "running" squares after a restart
+  (previously the persisted timer kept counting but its square painted as
+  idle).
