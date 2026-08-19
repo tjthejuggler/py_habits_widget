@@ -1,12 +1,18 @@
-## Amendment 7 — 2026-08-19: Effective points, Wayland hover recovery, QToolTip
+# ADR: PC-widget point config now flows through the bridge config channel
 
-**Context:** Round 9 user reports: (a) after dragging the widget, proximity shrink/expand stopped responding; (b) tooltips appeared at screen center (spawn point) instead of at the mouse; (c) square colours still wrong — expected all orange except Writing (red) — and tooltip today/week/month totals inflated ~10× (hundreds/thousands instead of ~40-50s).
+**Date:** 2026-08-19
+**Status:** Accepted (deployed)
 
-**Decisions:**
-1. **Effective points (pc_widget_stats.py):** mirror the phone's `HabitViewModel.effectivePointsForDate` + `HabitModels.applyDivider` (round-half, min 1) + `effectivePointsWithFallback`. Minutes-primary habits score `minutes:<habit>`/divider (sessions fallback by default; `none`/`value2` modes honoured); plain habits score raw/divider with legacy `secondary_value:` (or minutes) fallback when enabled; inverted-binary habits score 1 when not done; `noPointsHabits`/`disabledHabits` score 0; auxiliary `minutes:`/`secondary_value*:` slots are never summed as habits. Per-habit config resolution: bridge config `divider` field (forward-compatible — phone doesn't send it yet) > `~/.config/pc_bubble_widget/point_overrides.json` > newest parseable tail backup settings (`~/habitsdb/Auto_backups/` daily + `Manual_backups/`; unparseable mid-sync files skipped by walking mtime-descending) > default divider 30 for minutes-primary else 1. `load_config` passes `divider` through; `_apply_config` feeds stats before the rebuild-signature gate so divider-only changes recompute colours without rebuilding squares.
-2. **Tooltips:** replaced the custom `BubbleToolTip` top-level window with `QToolTip.showText(QCursor.pos(), rich_text, target)` — Wayland clients cannot self-position top-levels (KWin placed it at the spawn point), while platform popups anchor at the cursor. Enter/leave targeting retained; module-level `show_tip_text`/`hide_tip_text` seams for testability.
-3. **Hover wedge after compositor drags:** `begin_widget_drag` clears hover state (the grab eats Leave events); mouse tracking enabled on container+ squares so plain motion re-arms hover when Qt believes the pointer never left (no Enter fires); presence watchdog in `_check_proximity` drops hover when the cursor reading is frozen >3 s and no longer inside the window rect (QCursor.pos() only updates over our windows on Wayland).
+## Context
+The PC bubble widget computes square colours from *effective points* (raw ÷ divider, plus inverted-binary / noPoints subtypes). Until now the PC could only learn dividers/flags by mining the newest parseable phone backup (`~/habitsdb/Auto_backups/`, daily, frequently mid-sync) or the manual `~/.config/pc_bubble_widget/point_overrides.json`. The bridge config channel (`pc_widget/config`, pushed by the phone on settings changes and app startup, polled by the widget every 20 s) only carried `name`/`icon`/`minutes_primary` — and the bridge's POST sanitizer stripped everything else, including `divider`.
 
-**Verification:** smoke test 70/70 PASS (new checks: apply_divider semantics, minutes-primary 70/30→2, sessions fallback, backup-sourced dividers/minutes-primary/inverted/noPoints, QToolTip seam recorder). Real data: Good posture/Drew/Programming → 1 (orange), Writing → 0 (red); summary today 44 / week 55 / month 50 (was 161/1051/556).
+## Decision
+1. Phone (`HabitViewModel.pushPcWidgetConfig`) now sends `divider` (habitDividers, default 1), `inverted_binary`, and `no_points` per habit.
+2. Bridge (`tail_bridge/bridge_server.py pc_widget_set_config`) passes them through its sanitizer: `divider` validated as int ≥ 1 else null; booleans passed as bool else null. **null = "phone hasn't sent the field yet"**, not false.
+3. Widget (`pc_widget_sync.load_config`) forwards the three fields (None when absent/null).
+4. Stats (`pc_widget_stats.HabitStats`): `set_point_config` stores per-habit flags; `_effective_on` resolves each input with precedence **bridge config field (when non-null) > point_overrides.json (dividers/minutes only) > newest parseable backup > default (30 for minutes-primary, else 1)**. A config `false` deliberately overrides a stale backup `true`.
 
-**Android-side follow-up (not applied — outside this repo):** `pushPcWidgetConfig` (HabitViewModel.kt) could add `habitObj.put("divider", s.habitDividers[habitName] ?: 1)` so the widget stops depending on backup files; the PC already consumes the field.
+## Consequences
+- Divider tweaks reach the widget in seconds instead of up to a day; backup mining and overrides remain as fallback layers, so the widget keeps working with an old phone build or a down bridge.
+- Rollout is order-independent: any hop still on old code yields null/absent fields and the previous behaviour is preserved.
+- Smoke test (`pc_widget_smoke_test.py`) covers pass-through validation and config-beats-backup precedence for all three fields.

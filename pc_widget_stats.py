@@ -27,8 +27,9 @@ WINDOW_DAYS = 30   # day totals kept for the month average
 # Effective-points inputs (phone: HabitModels.applyDivider /
 # HabitViewModel.effectivePointsForDate). Per-habit config comes from
 # the first source that has it:
-#   1. the bridge config entry ("divider" — used as soon as the phone
-#      starts sending it; load_config passes it through)
+#   1. the bridge config entry ("divider" / "inverted_binary" /
+#      "no_points" — used as soon as the phone starts sending them;
+#      load_config passes them through)
 #   2. ~/.config/pc_bubble_widget/point_overrides.json
 #      {"Habit": {"divider": 30, "minutes_primary": true}, ...}
 #   3. the newest parseable tail backup's settings block — the phone
@@ -116,6 +117,7 @@ class HabitStats:
         # effective-points inputs (see set_point_config / _point_sources)
         self._cfg_dividers = {}  # habit -> divider from the bridge config
         self._cfg_minutes = set()  # habits flagged minutes_primary in config
+        self._cfg_flags = {}     # habit -> {'inverted','nopoints'} bool|None
         self._src_sig = None      # (overrides, backup) change signature
         self._src = {}            # merged backup/override point config
 
@@ -201,9 +203,11 @@ class HabitStats:
         """
         Feeds the phone-pushed widget config (load_config() output) so
         effective points match the phone: the minutes_primary flags now,
-        the dividers as soon as the phone starts sending them.
+        the dividers and the inverted_binary / no_points subtype flags
+        as soon as the phone starts sending them (None = field not sent
+        yet → keep the overrides/backup answer for it).
         """
-        dividers, minutes = {}, set()
+        dividers, minutes, flags = {}, set(), {}
         for h in habits or []:
             name = h.get('name') if isinstance(h, dict) else None
             if not isinstance(name, str) or not name:
@@ -213,8 +217,15 @@ class HabitStats:
             d = h.get('divider')
             if isinstance(d, int) and not isinstance(d, bool) and d >= 1:
                 dividers[name] = d
+            inv = h.get('inverted_binary')
+            nop = h.get('no_points')
+            flags[name] = {
+                'inverted': inv if isinstance(inv, bool) else None,
+                'nopoints': nop if isinstance(nop, bool) else None,
+            }
         self._cfg_dividers = dividers
         self._cfg_minutes = minutes
+        self._cfg_flags = flags
         self._mtime = None   # force a re-read so totals recompute
 
     def _point_sources(self):
@@ -317,9 +328,18 @@ class HabitStats:
         (or minutes) standing in when enabled.
         """
         raw = self._slot_days.get(name, {}).get(dkey, 0)
-        if name in src['nopoints'] or name in src['disabled']:
+        # bridge-config flags win over the (possibly stale) backup copy;
+        # None means the phone hasn't sent the field yet
+        cfg = self._cfg_flags.get(name) or {}
+        nopoints = cfg.get('nopoints')
+        if nopoints is None:
+            nopoints = name in src['nopoints']
+        if nopoints or name in src['disabled']:
             return 0   # tracked, but never part of the point totals
-        if name in src['inverted']:
+        inverted = cfg.get('inverted')
+        if inverted is None:
+            inverted = name in src['inverted']
+        if inverted:
             return 1 if raw <= 0 else 0
         mp = name in self._cfg_minutes or name in src['minutes']
         divider = self._cfg_dividers.get(name)

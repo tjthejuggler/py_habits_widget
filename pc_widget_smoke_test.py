@@ -133,18 +133,26 @@ def main() -> int:
 
     STATE['config'] = {'version': 1, 'habits': [
         {'name': 'Meditation', 'icon': 'lotus', 'minutes_primary': True,
-         'divider': 30},
-        {'name': 'Reading', 'icon': None, 'minutes_primary': False},
+         'divider': 30, 'inverted_binary': False, 'no_points': False},
+        {'name': 'Reading', 'icon': None, 'minutes_primary': False,
+         'inverted_binary': False, 'no_points': False},
         {'name': '', 'icon': None},          # malformed → dropped
         'garbage',                            # malformed → dropped
     ]}
     habits = sync.load_config()
     check('config parsed + validated', habits == [
         {'name': 'Meditation', 'icon': 'lotus', 'minutes_primary': True,
-         'divider': 30},
+         'divider': 30, 'inverted_binary': False, 'no_points': False},
         {'name': 'Reading', 'icon': None, 'minutes_primary': False,
-         'divider': None},
+         'divider': None, 'inverted_binary': False, 'no_points': False},
     ])
+    # True flags pass through untouched — probed here so the live widget
+    # fixture stays scoring-neutral (Reading keeps earning its 2 pts)
+    STATE['config']['habits'][1].update(inverted_binary=True, no_points=True)
+    probe = sync.load_config()
+    check('config True flags pass through',
+          probe[1]['inverted_binary'] is True and probe[1]['no_points'] is True)
+    STATE['config']['habits'][1].update(inverted_binary=False, no_points=False)
 
     start = datetime.now() - timedelta(minutes=25)
     event_id = sync.append_event('Meditation', kind='session',
@@ -449,6 +457,22 @@ def main() -> int:
           s3.habit_effective('Chess') == 0)
     check('day totals use the backup point config (2+2+1 → 5)',
           s3.summary_lines()[0] == 'today: 5 pts')
+
+    # the same inputs from the bridge config override the (stale) backup
+    s3.set_point_config([
+        {'name': 'Pushups', 'divider': 20},             # backup said 30
+        {'name': 'Coffee', 'inverted_binary': False},   # backup said inverted
+        {'name': 'Chess', 'no_points': False},          # backup said noPoints
+    ])
+    s3.refresh()
+    check('config divider beats the backup (60/20 → 3)',
+          s3.habit_effective('Pushups') == 3)
+    check('config un-inverts a backup habit (Coffee raw 0 → 0)',
+          s3.habit_effective('Coffee') == 0)
+    check('config re-points a noPoints habit (Chess raw 7 → 7)',
+          s3.habit_effective('Chess') == 7)
+    check('absent config fields keep the backup answer (Stretch2 45/30 → 2)',
+          s3.habit_effective('Stretch2') == 2)
     stats_mod.BACKUP_GLOBS = os.path.join(tempfile.gettempdir(),
                                           'pc_widget_smoke_no_bk_*.json')
 

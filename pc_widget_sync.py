@@ -133,9 +133,12 @@ def load_config() -> Optional[List[Dict]]:
     """
     Fetches the habit-square config pushed by the phone:
     [{"name": str, "icon": str|None, "minutes_primary": bool,
-      "divider": int|None}, ...]
-    The divider (points divisor, phone-side habitDividers) is passed
-    through when the phone sends it — used for effective points.
+      "divider": int|None, "inverted_binary": bool|None,
+      "no_points": bool|None}, ...]
+    The effective-points inputs (phone-side habitDividers /
+    invertedBinaryHabits / noPointsHabits) are passed through when the
+    phone sends them; None means the field hasn't arrived yet, so the
+    stats layer falls back to its overrides/backup sources.
     Returns None when the bridge is unreachable (caller keeps its last
     known config); [] when the phone has toggled nothing on yet.
     Malformed entries are dropped individually.
@@ -152,12 +155,16 @@ def load_config() -> Optional[List[Dict]]:
             continue
         icon = raw.get('icon')
         div = raw.get('divider')
+        inv = raw.get('inverted_binary')
+        nop = raw.get('no_points')
         habits.append({
             'name': name,
             'icon': icon if isinstance(icon, str) and icon else None,
             'minutes_primary': bool(raw.get('minutes_primary', False)),
             'divider': div if (isinstance(div, int) and not isinstance(div, bool)
                                and div >= 1) else None,
+            'inverted_binary': inv if isinstance(inv, bool) else None,
+            'no_points': nop if isinstance(nop, bool) else None,
         })
     return habits
 
