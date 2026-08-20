@@ -34,6 +34,7 @@ import fcntl
 import json
 import os
 import select
+import struct
 import subprocess
 import threading
 import time
@@ -105,6 +106,25 @@ callDBus("@S@", "@P@", "@I@", "WindowList", JSON.stringify(out));
 EVIOCGBIT_EVTYPE = 0x80044520   # EVIOCGBIT(0, 4): supported-event-types bitmap
 EV_KEY_BIT = 0x02               # keyboards, mice, touchpads all set this
 
+# evdev input_event on x86_64: timeval (16) + type (2) + code (2) + value (4)
+_EVDEV_EVENT = struct.Struct('<QQHHi')
+EVDEV_EV_KEY = 0x01             # key/button events (movement is EV_REL/EV_ABS)
+EVDEV_KEY_DOWN = 1              # value 1 = press (0 = release, 2 = autorepeat)
+
+
+def _buffer_has_press(data: bytes) -> bool:
+    """
+    True if an evdev chunk contains at least one key/button PRESS.
+    Mouse movement, releases and autorepeat don't count — only a real
+    press counts as "interacting with the window".
+    """
+    size = _EVDEV_EVENT.size
+    for off in range(0, len(data) - size + 1, size):
+        _, _, ev_type, _, value = _EVDEV_EVENT.unpack_from(data, off)
+        if ev_type == EVDEV_EV_KEY and value == EVDEV_KEY_DOWN:
+            return True
+    return False
+
 
 class InputActivityMonitor:
     """
@@ -115,6 +135,7 @@ class InputActivityMonitor:
 
     def __init__(self):
         self.last_activity = time.monotonic()
+        self.last_press = 0.0    # last key/button DOWN (movement never counts)
         self.available = False
         self._stop_evt = threading.Event()
         self._thread = None
@@ -167,8 +188,11 @@ class InputActivityMonitor:
                 break
             for fd in ready:
                 try:
-                    if os.read(fd, 8192):
+                    data = os.read(fd, 8192)
+                    if data:
                         self.last_activity = time.monotonic()
+                        if _buffer_has_press(data):
+                            self.last_press = time.monotonic()
                 except OSError:         # device vanished — drop it
                     try:
                         fds.remove(fd)
@@ -180,6 +204,27 @@ class InputActivityMonitor:
                 os.close(fd)
             except OSError:
                 pass
+
+
+class _FocusTracker:
+    """
+    Remembers the active window's IDENTITY — not just its class, so
+    cycling between two windows of the same app (same taskbar icon,
+    same class) still counts as a focus change and re-arms the
+    "must press something inside it afterwards" rule.
+    """
+
+    def __init__(self):
+        self.key = None
+        self.changed_at = time.monotonic()
+
+    def update(self, cls, minimized, caption=''):
+        key = (cls or None, bool(minimized), caption)
+        if key != self.key:
+            self.key = key
+            self.changed_at = time.monotonic()
+            return True
+        return False
 
 
 # ── KDE / KWin backend (Wayland and X11 sessions of KDE) ──────────────────
@@ -215,6 +260,7 @@ class _KWinBackend(QObject):
         super().__init__(controller)
         self.active_class = None
         self.active_minimized = False
+        self.focus = _FocusTracker()
         self._bus = QDBusConnection.sessionBus()
         self._enum_cb = None
         self._enum_timer = QTimer(self)
@@ -277,6 +323,7 @@ class _KWinBackend(QObject):
     # ── active window events ─────────────────────────────────────────────
 
     def _on_active(self, cls, caption, minimized):
+        self.focus.update(cls, bool(minimized), caption)
         self.active_class = cls or None
         self.active_minimized = bool(minimized)
 
@@ -307,6 +354,8 @@ class _X11Backend(QObject):
         super().__init__(controller)
         self.active_class = None
         self.active_minimized = False
+        self.focus = _FocusTracker()
+        self._active_wid = None
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._poll)
 
@@ -332,8 +381,15 @@ class _X11Backend(QObject):
         QTimer.singleShot(0, lambda: callback(rows))
 
     def _poll(self):
-        cls = _run(['xdotool', 'getactivewindow', 'getwindowclassname'])
-        self.active_class = cls.strip() or None if cls is not None else None
+        out = _run(['xdotool', 'getactivewindow'])
+        wid = out.strip() if out is not None else None
+        if not wid:
+            return
+        if wid != self._active_wid:
+            self._active_wid = wid
+            self.focus.update(None, False, wid)   # any switch re-arms
+        out = _run(['xdotool', 'getwindowclassname', wid])
+        self.active_class = out.strip() or None if out is not None else None
 
 
 # ── controller: mappings, persistence, the start/stop state machine ───────
@@ -344,7 +400,11 @@ class AutoDetectController(QObject):
     whether each mapped habit's timer should run:
 
       run  ⇔  target window is the ACTIVE window (not minimized)
-               AND the user typed/clicked within `idle_seconds`.
+               AND a key/button press landed INSIDE it after it became
+               active — mouse movement, releases, and the input that
+               merely RAISED the window (alt-tab, taskbar click,
+               cycling its icon) never start the timer — and keeps
+               running while input continues within `idle_seconds`.
 
     Timers the controller started itself it also stops itself; timers
     the user started manually are never auto-stopped. A manual stop
@@ -500,6 +560,13 @@ class AutoDetectController(QObject):
         focused_ok = bool(cls) and not self._backend.active_minimized
         user_active = (self._input.idle_seconds() <= self._idle_seconds
                        if self._input.available else True)
+        # a real press (key down / button down) must land INSIDE the
+        # focused window, AFTER it became active: mouse movement,
+        # button releases and the press that merely raised the window
+        # (alt-tab, taskbar click, cycling its icon) never satisfy this
+        interacted = (
+            self._input.last_press > self._backend.focus.changed_at
+            if self._input.available else True)
         known = self._habits()
         for habit, mapped in list(self._mappings.items()):
             if habit not in known:
@@ -511,7 +578,8 @@ class AutoDetectController(QObject):
                 if not focused or not user_active:
                     self._auto_started.discard(habit)
                     self._on_stop(habit)
-            elif (focused and user_active and habit not in self._suppress
+            elif (focused and user_active and interacted
+                    and habit not in self._suppress
                     and not self._is_running(habit)):
                 self._auto_started.add(habit)
                 self._on_start(habit)

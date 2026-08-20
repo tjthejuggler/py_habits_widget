@@ -1,21 +1,20 @@
-# ADR: Auto-detect stop debounce (three-minute grace, retroactive finish)
+# ADR: Auto-detect start requires a real press INSIDE the window (revised)
 
-**Date:** 2026-08-20 (revised same day: grace extended 60 s → 180 s at user request)
+**Date:** 2026-08-20 (revision 2 — first timestamp-based fix proved insufficient in practice)
 **Status:** Accepted
 
 ## Context
-The PC bubble widget's window auto-detect (`auto_detect.py`) stops a habit timer the instant the mapped window loses focus or the user goes idle 15 s. Brief window switches therefore fragmented one work session into many tiny sessions/taps, each synced to the phone as a separate increment — cluttering the phone's history.
+Rev1 compared "any input after the focus change". Two real-world holes, found by user testing:
+1. **Same-class cycling**: clicking a taskbar icon to cycle multiple windows of one app (several VSCode windows) never changed the `(class, minimized)` tuple, so the focus timestamp went stale and the recent taskbar click counted as "input after focus".
+2. **Input noise**: the button RELEASE following the raising click, and any mouse movement after the window appeared, both satisfied "input after focus".
 
-## Decision
-Debounce auto-detected stops with a **180-second grace period** (`AUTO_STOP_GRACE_MS = 180_000`), implemented entirely in the widget layer (`pc_bubble_widget.py.BubbleWidget`); `auto_detect.py` is untouched.
-
-- `request_auto_stop(habit)`: records the activity-stop datetime in `pending_auto_stops` and arms a single-shot grace QTimer. The timer stays in `self.timers` (square keeps running, session conceptually alive).
-- Return within the grace period: the controller's `is_running` lambda reports a grace-pending timer as NOT running, so `_tick` re-fires `on_start` → `_auto_started` cancels the pending stop → same session continues (same start timestamp, one increment).
-- Grace expiry: `_finalize_auto_stop` calls `stop_timer(habit, end=stopped_at)` — finish time is **retroactive** to the moment window activity stopped, not the expiry moment. `append_event` (pc_widget_sync.py) gained an `end` parameter so the bridge payload's `end` field is honest too.
-- Manual stop: `stop_timer` cancels any pending grace first → immediate, no debounce (manual always wins).
-- Persistence: `pending_stops` in `state.json`; on load, grace re-arms with the remaining time (`start(max(0, remaining))` — never finalize inline during `__init__`, `ack_timer` doesn't exist yet). Quit flushes all pending stops via `finalize_pending_stops()` so no session is swallowed.
+## Decision (rev2)
+- **Press-only interaction**: `InputActivityMonitor` now parses the evdev stream (`struct '<QQHHi'`, 24-byte input_event on x86_64) and tracks `last_press` — only EV_KEY events with value 1 (key/button DOWN). Movement (EV_REL), releases (0) and autorepeat (2) update `last_activity` (idle rule) but never `last_press`. Pure helper `_buffer_has_press(data)` is unit-tested.
+- **Identity-based focus tracking**: `_FocusTracker.update(cls, minimized, caption)` keys on (class, minimized, caption) — KWin pushes caption per window, so cycling same-class windows re-arms the rule. The X11 backend keys on the xdotool window id (`getactivewindow` → id, then `getwindowclassname`).
+- `AutoDetectController._tick`: `interacted = input.last_press > backend.focus.changed_at` (degraded mode without evdev keeps focus-only semantics). `user_active` stays in the start condition so a stale `interacted` can't fight the idle-stop rule.
 
 ## Consequences
-- One window-flurry → exactly one phone event, timestamped at the real session bounds.
-- Displayed elapsed keeps ticking during grace (cosmetic only; recorded minutes exclude the idle gap).
-- Verified by `pc_widget_smoke_test.py` section [2b] (interval check asserts against `AUTO_STOP_GRACE_MS`, so it tracks the constant automatically).
+- Taskbar clicks, icon cycling, alt-tab, maximize, mouse movement over the window: never auto-start.
+- First real click/keystroke inside the window starts the timer; continuous typing keeps it running (title/caption changes re-arm the rule but the next keystroke re-satisfies it within ~1 s).
+- Widget process must be restarted to pick up changes (user's first test hit the pre-fix process; restarted via start_pc_bubble.sh).
+- Verified by smoke test section [8] (8 checks incl. same-class cycling and evdev parsing): 101/101 pass.

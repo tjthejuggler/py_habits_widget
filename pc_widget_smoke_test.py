@@ -659,6 +659,90 @@ def main() -> int:
     check('bridge down: append_event → None (flash shows failure)',
           sync.append_event('Reading', kind='tap') is None)
 
+    # ── auto-detect start rule (a real press inside the window) ────────
+    print('[8] auto-detect start rule')
+    import struct as _struct
+    from auto_detect import (AutoDetectController, _FocusTracker,
+                             _buffer_has_press)
+
+    class FakeBackend:
+        def __init__(self):
+            self.active_class = None
+            self.active_minimized = False
+            self.focus = _FocusTracker()
+
+    class FakeInput:
+        def __init__(self):
+            self.available = True
+            self.last_activity = 0.0
+            self.last_press = 0.0
+
+        def idle_seconds(self):
+            return time.monotonic() - self.last_activity
+
+    running = set()
+    ctrl = AutoDetectController(
+        is_running=lambda h: h in running,
+        on_start=lambda h: running.add(h),
+        on_stop=lambda h: running.discard(h),
+        on_info=lambda msg: None,
+        habits_provider=lambda: {'Meditation'},
+    )
+    ctrl._mappings = {'Meditation': 'code'}
+    ctrl._idle_seconds = 15      # don't let the real config skew the test
+    ctrl._backend = FakeBackend()
+    ctrl._input = FakeInput()
+
+    # taskbar/alt-tab raise: the press that raised it predates the
+    # focus change, and mouse movement afterwards is not a press
+    ctrl._backend.active_class = 'code'
+    ctrl._backend.focus.update('code', False, 'main.py — code')
+    ctrl._input.last_press = time.monotonic() - 10    # the raising click
+    ctrl._input.last_activity = time.monotonic() - 0.5  # mouse moving now
+    ctrl._tick()
+    check('taskbar click / alt-tab raise does NOT auto-start',
+          'Meditation' not in running)
+
+    # cycling between two windows of the SAME class (same taskbar icon)
+    # re-arms the rule: the cycling clicks predate the last switch
+    ctrl._backend.focus.update('code', False, 'other.py — code')
+    ctrl._tick()
+    check('cycling same-class windows does NOT auto-start',
+          'Meditation' not in running)
+
+    # a real key/button press landing inside the focused window starts it
+    ctrl._backend.focus.changed_at = time.monotonic() - 5
+    ctrl._input.last_press = time.monotonic() - 1
+    ctrl._tick()
+    check('pressing a key / clicking inside the window auto-starts',
+          'Meditation' in running)
+
+    # switching away still auto-stops
+    ctrl._backend.active_class = 'browser'
+    ctrl._backend.focus.update('browser', False, 'web')
+    ctrl._tick()
+    check('leaving the window auto-stops', 'Meditation' not in running)
+
+    # degraded mode (no input devices): focus alone drives the timer
+    ctrl._input.available = False
+    ctrl._backend.active_class = 'code'
+    ctrl._backend.focus.update('code', False, 'main.py — code')
+    ctrl._tick()
+    check('no input devices: focus alone starts (degraded mode)',
+          'Meditation' in running)
+
+    # evdev parsing: only key/button DOWN counts, movement never does
+    press_rec = _struct.pack('<QQHHi', 0, 0, 0x01, 30, 1)   # KEY_A down
+    rel_rec = _struct.pack('<QQHHi', 0, 0, 0x02, 0, 5)      # mouse movement
+    check('evdev: press detected in chunk',
+          _buffer_has_press(press_rec + rel_rec))
+    check('evdev: pure mouse movement is not a press',
+          not _buffer_has_press(rel_rec * 3))
+    check('evdev: release / autorepeat are not presses',
+          not _buffer_has_press(
+              _struct.pack('<QQHHi', 0, 0, 0x01, 30, 0)
+              + _struct.pack('<QQHHi', 0, 0, 0x01, 30, 2)))
+
     bubble.close()
     app.quit()
     print()

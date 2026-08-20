@@ -238,9 +238,13 @@ open window type (deduplicated by app class — four VSCode windows list as
 one `code` entry, hover shows a sample title). Pick one and that habit's
 timer runs itself whenever you actually use that app:
 
-- **Auto-start** when the paired window is the active (focused, not
-  minimized) window AND you typed/clicked within the last 15 s — alt-tab
-  alone doesn't start it, typing does.
+- **Auto-start** only when you actually interact with the paired window:
+  it must be the active (focused, not minimized) window AND a real key
+  or button press must land INSIDE it after it became active. Merely
+  bringing it to the front — alt-tab, taskbar click, clicking the icon
+  to cycle its windows, maximize — never starts the timer: mouse
+  movement, button releases and the press that raised the window don't
+  count; your first real click/keystroke in it does.
 - **Auto-stop (debounced)** when you switch away or minimize the window,
   or after 15 s of no keyboard/mouse input at all — but the timer keeps
   running through a three-minute **grace period** first. Get back to the
@@ -272,6 +276,12 @@ How it works on this KDE/Wayland machine (`auto_detect.py`):
   alone drives the timer (a flash warns once).
 - Desktop plumbing (plasmashell, xwaylandvideobridge, …) and the
   widget's own windows are filtered out of the picker.
+- Both backends timestamp every active-window change by window
+  IDENTITY (`_FocusTracker`: class + caption on KWin, window id on
+  X11), so cycling between same-class windows still re-arms the rule.
+  Auto-start requires a key/button PRESS strictly after that moment —
+  the evdev stream is parsed so movement, releases and autorepeat
+  never satisfy it.
 - Grace-period stops live entirely in the widget layer (`auto_detect.py`
   is untouched): a timer in its grace minute reports as "not running"
   to the controller, so re-focusing the window re-fires auto-start and
