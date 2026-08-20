@@ -1,13 +1,21 @@
-## ADR: Display-time geometric tooltip targeting (2026-08-20)
+# ADR: Auto-detect stop debounce (three-minute grace, retroactive finish)
 
-**Context:** Hovering a habit square usually showed the center bubble's summary instead of the square's own message. Root cause: `request_tooltip()` was last-writer-wins on `_tip_target`, and Qt's Enter delivery is unreliable for this widget in two ways — (1) the container's Enter can be delivered AFTER a child square's, letting the container steal the target; (2) a square that glides under a *stationary* cursor during the ring-spread animation never receives an Enter at all (Qt does not synthesize enter on widget move under a still pointer on Wayland).
+**Date:** 2026-08-20 (revised same day: grace extended 60 s → 180 s at user request)
+**Status:** Accepted
 
-**Decision:** Tooltip targets are resolved GEOMETRICALLY at display time, not from enter/leave tracking. `BubbleWidget._square_at_cursor()` maps `QCursor.pos()` into widget coords and returns the square whose rect contains it; positions inside the center circle (BUBBLE_D/2 of center) belong to the center bubble — this is what keeps tucked squares (which hide behind the raised core) from hijacking the bubble's own hover. The geometrically-resolved square deliberately SKIPS the `_hover_set` guard (the cursor being inside its rect is stronger evidence than Enter tracking, which is exactly what fails in the races above); the guard only applies to the fallback targets (container / tracked `_tip_target`). QCursor.pos() is safe here even on Wayland: Qt caches the pointer position from motion events while the pointer is over our window, and a `rect().contains` check rejects stale frozen readings.
+## Context
+The PC bubble widget's window auto-detect (`auto_detect.py`) stops a habit timer the instant the mapped window loses focus or the user goes idle 15 s. Brief window switches therefore fragmented one work session into many tiny sessions/taps, each synced to the phone as a separate increment — cluttering the phone's history.
 
-**Consequence:** `request_tooltip()` merely arms the 600 ms timer; what shows is decided by where the cursor actually is when the timer fires. Enter/leave tracking remains for spread/contract of the ring and for hiding tips on leave.
+## Decision
+Debounce auto-detected stops with a **180-second grace period** (`AUTO_STOP_GRACE_MS = 180_000`), implemented entirely in the widget layer (`pc_bubble_widget.py.BubbleWidget`); `auto_detect.py` is untouched.
 
-## ADR: Minutes-primary tooltips read the minutes: slot (2026-08-20)
+- `request_auto_stop(habit)`: records the activity-stop datetime in `pending_auto_stops` and arms a single-shot grace QTimer. The timer stays in `self.timers` (square keeps running, session conceptually alive).
+- Return within the grace period: the controller's `is_running` lambda reports a grace-pending timer as NOT running, so `_tick` re-fires `on_start` → `_auto_started` cancels the pending stop → same session continues (same start timestamp, one increment).
+- Grace expiry: `_finalize_auto_stop` calls `stop_timer(habit, end=stopped_at)` — finish time is **retroactive** to the moment window activity stopped, not the expiry moment. `append_event` (pc_widget_sync.py) gained an `end` parameter so the bridge payload's `end` field is honest too.
+- Manual stop: `stop_timer` cancels any pending grace first → immediate, no debounce (manual always wins).
+- Persistence: `pending_stops` in `state.json`; on load, grace re-arms with the remaining time (`start(max(0, remaining))` — never finalize inline during `__init__`, `ack_timer` doesn't exist yet). Quit flushes all pending stops via `finalize_pending_stops()` so no session is swallowed.
 
-**Context:** The per-square "today" line used `HabitStats.habit_today()` — the habit's RAW slot count, which for minutes-primary habits is the session TALLY (each timer stop = +1 timestamp), not minutes. "Programming sessions" showed "3 min" while the phone correctly showed 22 minutes across 3 sessions.
-
-**Decision:** Added `HabitStats.habit_minutes_today(name)` reading the `minutes:<name>` slot (the number the phone's habit screen headlines). Minutes-primary squares now render "today: N min (M sessions)"; count-based habits keep "today: N pts". Effective-points math (`habit_effective`, day totals) is unchanged — it already scored minutes through the divider.
+## Consequences
+- One window-flurry → exactly one phone event, timestamped at the real session bounds.
+- Displayed elapsed keeps ticking during grace (cosmetic only; recorded minutes exclude the idle gap).
+- Verified by `pc_widget_smoke_test.py` section [2b] (interval check asserts against `AUTO_STOP_GRACE_MS`, so it tracks the constant automatically).

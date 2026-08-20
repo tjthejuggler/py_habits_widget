@@ -174,6 +174,7 @@ def append_event(
     kind: str = 'session',
     start: Optional[datetime] = None,
     minutes: int = 0,
+    end: Optional[datetime] = None,
 ) -> Optional[str]:
     """
     Queues one event on the bridge and returns its ID (None on failure —
@@ -182,15 +183,19 @@ def append_event(
     kind: 'session' (timer with minutes) or 'tap' (quick +1).
     start: when the habit actually happened (session start / tap time) —
            the phone records its timestamp at THIS time, not at delivery.
+    end:   when the habit actually stopped (defaults to now). Auto-detect
+           finalizes retroactively after its grace minute, at the moment
+           window activity stopped — not at delivery time.
     """
     now = datetime.now()
     start = start or now
+    finish = end or now
     payload = {
         'habit': habit,
         'kind': kind,
         'date': start.strftime('%Y-%m-%d'),
         'start': start.strftime('%H:%M:%S'),
-        'end': now.strftime('%H:%M:%S'),
+        'end': finish.strftime('%H:%M:%S'),
         'minutes': max(0, int(minutes)),
     }
     root = _request('POST', 'pc_widget/event', payload)

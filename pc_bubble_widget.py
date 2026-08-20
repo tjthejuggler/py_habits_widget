@@ -89,6 +89,23 @@ DOT_PENDING = QColor(255, 170, 0)     # orange dot: queued, not yet acked
 DOT_ACKED = QColor(82, 196, 26)       # green dot: phone confirmed
 TEXT_COLOR = QColor(235, 235, 235)
 
+# Ack-poll cadence: 1 s while events are queued (the phone long-polls the
+# bridge, so its ack usually lands ~1 s after the timer stops), 30 s when
+# the queue is empty. stop_timer() arms the fast cadence the moment an
+# event is queued — waiting for the next idle tick to switch is what made
+# the orange "waiting for the phone to sync" dot linger ~30 s after the
+# phone had already confirmed.
+ACK_POLL_FAST_MS = 1_000
+ACK_POLL_IDLE_MS = 30_000
+
+# Auto-detected stops are debounced: when a mapped window loses focus
+# (or the user goes idle) the timer keeps running for a three-minute
+# grace period. Activity in that window again within it → the SAME
+# session simply continues. No activity → the session is finalized
+# retroactively at the moment window activity actually stopped, so
+# brief window switches don't spam the phone with tiny sessions/taps.
+AUTO_STOP_GRACE_MS = 180_000
+
 
 def fmt_elapsed(seconds: int) -> str:
     h, rem = divmod(int(seconds), 3600)
@@ -361,6 +378,8 @@ class BubbleWidget(QWidget):
         self.squares = []                 # type: list
         self.timers = {}                  # habit name -> datetime (start)
         self.pending_by_habit = {}        # habit name -> queued count
+        self.pending_auto_stops = {}      # habit -> datetime activity stopped
+        self._grace_timers = {}           # habit -> single-shot grace QTimer
         self.auto_note_toggle = None      # set by PcBubbleApp (auto-detect)
         self._drag_offset = None          # type: QPoint | None
         self._config_sig = None          # (name, icon, minutes_primary) tuple
@@ -437,7 +456,7 @@ class BubbleWidget(QWidget):
         # ack poll (phone confirms applied events)
         self.ack_timer = QTimer(self)
         self.ack_timer.timeout.connect(self._poll_acks)
-        self.ack_timer.start(30_000)
+        self.ack_timer.start(ACK_POLL_IDLE_MS)
         self._poll_acks()
 
     # ── geometry helpers ────────────────────────────────────────────────
@@ -650,11 +669,15 @@ class BubbleWidget(QWidget):
         self._save_state()
         return True
 
-    def stop_timer(self, habit_name: str):
+    def stop_timer(self, habit_name: str, end=None):
         """
         Stops a habit's timer, queues the event on the bridge and
         flashes the confirmation. No-op when no timer is running.
+        `end` overrides the finish time — auto-detect finalizes
+        retroactively at the moment window activity stopped, after
+        its grace period lapsed.
         """
+        self._cancel_pending_stop(habit_name)
         start = self.timers.pop(habit_name, None)
         if start is None:
             return
@@ -662,14 +685,22 @@ class BubbleWidget(QWidget):
             if sq.habit_name == habit_name:
                 sq.running = False
         self._kick_anim()
-        elapsed = (datetime.now() - start).total_seconds()
+        finish = end or datetime.now()
+        elapsed = (finish - start).total_seconds()
         minutes = int(elapsed // 60)
         kind = 'session' if minutes > 0 else 'tap'
         event_id = append_event(habit_name, kind=kind, start=start,
-                                minutes=minutes)
+                                minutes=minutes, end=finish)
         if event_id:
             self.pending_by_habit[habit_name] = \
                 self.pending_by_habit.get(habit_name, 0) + 1
+            # Arm the fast ack poll NOW. The phone long-polls the bridge
+            # and typically acks within ~1 s; on the idle cadence the
+            # widget wouldn't look again for up to 30 s, leaving the
+            # orange "waiting for the phone to sync" dot up long after
+            # the phone had actually applied the event. start() also
+            # restarts the countdown from zero.
+            self.ack_timer.start(ACK_POLL_FAST_MS)
         self._apply_pending_badges()
         for sq in self.squares:
             if sq.habit_name == habit_name:
@@ -679,6 +710,59 @@ class BubbleWidget(QWidget):
         self.window().show_flash(
             habit_name, minutes if kind == 'session' else 0,
             event_id is not None)
+
+    # ── auto-stop grace period (debounce) ───────────────────────────────
+
+    def request_auto_stop(self, habit_name: str):
+        """
+        Auto-detect says activity stopped. Don't stop outright — arm
+        the grace countdown: activity in the mapped window again
+        within it continues this same session; only after it lapses
+        is the session finalized, retroactively at the moment
+        activity stopped.
+        """
+        if habit_name not in self.timers:
+            return
+        self.pending_auto_stops[habit_name] = datetime.now()
+        self._arm_grace(habit_name, AUTO_STOP_GRACE_MS)
+        self._save_state()
+
+    def cancel_pending_stop(self, habit_name: str):
+        """Back inside the grace period → the same session keeps running."""
+        self._cancel_pending_stop(habit_name)
+        self._save_state()
+
+    def finalize_pending_stops(self):
+        """Flush every grace-period stop now (retroactively) — shutdown."""
+        for habit_name in list(self.pending_auto_stops):
+            self._finalize_auto_stop(habit_name)
+
+    def _arm_grace(self, habit_name: str, ms: int):
+        timer = self._grace_timers.get(habit_name)
+        if timer is None:
+            timer = QTimer(self)
+            timer.setSingleShot(True)
+            timer.timeout.connect(
+                lambda h=habit_name: self._finalize_auto_stop(h))
+            self._grace_timers[habit_name] = timer
+        timer.start(max(0, ms))
+
+    def _finalize_auto_stop(self, habit_name: str):
+        stopped_at = self.pending_auto_stops.pop(habit_name, None)
+        self._drop_grace_timer(habit_name)
+        if stopped_at is None or habit_name not in self.timers:
+            return
+        self.stop_timer(habit_name, end=stopped_at)  # flashes the minutes
+
+    def _cancel_pending_stop(self, habit_name: str):
+        self.pending_auto_stops.pop(habit_name, None)
+        self._drop_grace_timer(habit_name)
+
+    def _drop_grace_timer(self, habit_name: str):
+        timer = self._grace_timers.pop(habit_name, None)
+        if timer is not None:
+            timer.stop()
+            timer.deleteLater()
 
     def elapsed_for(self, habit_name: str) -> int:
         start = self.timers.get(habit_name)
@@ -725,8 +809,11 @@ class BubbleWidget(QWidget):
             sq.update()
         self._apply_pending_badges()
         # fast follow-up while anything is queued (the phone long-polls,
-        # so acks land within ~a second); relax when the queue is empty
-        self.ack_timer.setInterval(2000 if self.pending_by_habit else 30000)
+        # so acks land within ~a second); relax when the queue is empty.
+        # start() rather than setInterval(): the new interval's countdown
+        # must begin now, not ride the remains of the previous schedule.
+        self.ack_timer.start(
+            ACK_POLL_FAST_MS if self.pending_by_habit else ACK_POLL_IDLE_MS)
 
     def _apply_pending_badges(self):
         for sq in self.squares:
@@ -886,6 +973,8 @@ class BubbleWidget(QWidget):
                 'pos': [self.x(), self.y()],
                 'timers': {h: s.isoformat(timespec='seconds')
                            for h, s in self.timers.items()},
+                'pending_stops': {h: s.isoformat(timespec='seconds')
+                                  for h, s in self.pending_auto_stops.items()},
             }
             with open(STATE_FILE + '.tmp', 'w') as f:
                 json.dump(data, f)
@@ -906,6 +995,20 @@ class BubbleWidget(QWidget):
                     self.timers[h] = datetime.fromisoformat(iso)
                 except ValueError:
                     pass
+            for h, iso in (data.get('pending_stops') or {}).items():
+                if h not in self.timers:
+                    continue
+                try:
+                    stopped_at = datetime.fromisoformat(iso)
+                except ValueError:
+                    continue
+                self.pending_auto_stops[h] = stopped_at
+                remaining_ms = AUTO_STOP_GRACE_MS - int(
+                    (datetime.now() - stopped_at).total_seconds() * 1000)
+                # expired while we were down → 0 ms: finalize as soon as
+                # the event loop runs, never inline (init is still building
+                # and e.g. ack_timer doesn't exist yet)
+                self._arm_grace(h, remaining_ms)
         except (OSError, ValueError):
             self.recall_to_tray(save=False)
 
@@ -1058,7 +1161,12 @@ class PcBubbleApp:
 
         # window-activity auto start/stop for mapped habits
         self.auto = AutoDetectController(
-            is_running=lambda h: h in self.bubble.timers,
+            # a timer inside its grace period counts as NOT running, so
+            # the controller re-fires on_start when the window regains
+            # focus — which cancels the pending stop and continues the
+            # same session instead of letting the grace expire under it
+            is_running=lambda h: (h in self.bubble.timers
+                                  and h not in self.bubble.pending_auto_stops),
             on_start=self._auto_started,
             on_stop=self._auto_stopped,
             on_info=lambda msg: FlashLabel(msg, self.bubble),
@@ -1069,13 +1177,18 @@ class PcBubbleApp:
         self.auto.start()
 
     def _auto_started(self, habit: str):
+        # back within the grace period → cancel the pending stop; the
+        # timer never actually stopped, so this is the SAME session
+        self.bubble.cancel_pending_stop(habit)
         if self.bubble.start_timer(habit):
             cls = self.auto.mapping_for(habit)
             FlashLabel('{} ▶ auto ({})'.format(habit, cls or 'window'),
                        self.bubble)
 
     def _auto_stopped(self, habit: str):
-        self.bubble.stop_timer(habit)   # flashes the synced minutes itself
+        # debounced: finalizes retroactively only if the user doesn't
+        # return to the window within the grace period
+        self.bubble.request_auto_stop(habit)
 
     def on_tray_activated(self, reason):
         if reason in (QSystemTrayIcon.Trigger, QSystemTrayIcon.DoubleClick):
@@ -1165,6 +1278,9 @@ class PcBubbleApp:
 
     def quit(self):
         self.auto.stop()
+        # flush grace-period stops now (retroactively) so quitting the
+        # widget can't silently swallow a session still in its grace period
+        self.bubble.finalize_pending_stops()
         self.bubble._save_state()
         self.tray.hide()
         self.qapp.quit()

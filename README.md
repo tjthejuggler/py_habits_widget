@@ -241,8 +241,15 @@ timer runs itself whenever you actually use that app:
 - **Auto-start** when the paired window is the active (focused, not
   minimized) window AND you typed/clicked within the last 15 s — alt-tab
   alone doesn't start it, typing does.
-- **Auto-stop** when you switch away or minimize the window, or after
-  15 s of no keyboard/mouse input at all.
+- **Auto-stop (debounced)** when you switch away or minimize the window,
+  or after 15 s of no keyboard/mouse input at all — but the timer keeps
+  running through a three-minute **grace period** first. Get back to the
+  window within those three minutes and the SAME session simply continues (same
+  start, one increment on the phone). Only when the grace period lapses is the
+  session finalized — retroactively stamped as finished at the moment
+  the window activity actually stopped, so brief window switches can't
+  chop one session into a clutter of tiny ones. Manual stops bypass the
+  grace and apply immediately.
 - **Manual always wins**: clicking the square stops the timer and
   suppresses auto-start until you leave that window once (so it can't
   fight you); timers you started by hand are never auto-stopped.
@@ -265,6 +272,13 @@ How it works on this KDE/Wayland machine (`auto_detect.py`):
   alone drives the timer (a flash warns once).
 - Desktop plumbing (plasmashell, xwaylandvideobridge, …) and the
   widget's own windows are filtered out of the picker.
+- Grace-period stops live entirely in the widget layer (`auto_detect.py`
+  is untouched): a timer in its grace minute reports as "not running"
+  to the controller, so re-focusing the window re-fires auto-start and
+  cancels the pending stop. Pending stops persist in `state.json` — an
+  expired one finalizes retroactively right after a restart, and
+  quitting the widget flushes any pending grace stops so no session is
+  lost.
 
 ## PC Bubble Widget — Fast Sync, Visible Indicators, White Icons
 
@@ -280,6 +294,21 @@ How it works on this KDE/Wayland machine (`auto_detect.py`):
   on bridges without it), and the widget polls acks every 2 s while
   anything is queued (30 s when idle). Net effect: a stopped timer
   lands on the phone and clears its orange dot in ~1–3 s.
+- **Instant ack pickup on the PC** *(2026-08-20)*: the fast ack poll
+  above only armed *after* the next idle tick — up to 30 s after the
+  timer stopped — so the orange "waiting for the phone to sync" dot
+  lingered long after the phone had actually confirmed (the long-poll
+  delivers its ack ~1 s after the stop). `stop_timer()` now arms the
+  fast poll (`ACK_POLL_FAST_MS`, 1 s) the moment the event is queued,
+  and `_poll_acks()` re-arms with `start()` instead of `setInterval()`
+  so each interval's countdown begins immediately rather than riding
+  the remains of the previous schedule. The dot now clears ~1–2 s
+  after the phone acks, instead of up to ~30 s later. (Phone-side: the
+  Tail app's 2-minute widget-watchdog heartbeat now also drains the
+  queue on every fire, so events land within ~2 min even when neither
+  the bubble service nor the app is running — ~9 min worst case in
+  deep Doze. FCM push remains the only true instant-everywhere option,
+  and would need a Firebase project set up.)
 - **Indicator squares never collapse** *(2026-08-20)*: any square with
   something to say — a running timer, an orange queued-events dot, or
   the green just-acked flash — now stays out at rest radius instead of

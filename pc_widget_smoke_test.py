@@ -217,6 +217,9 @@ def main() -> int:
     check('timer stopped', not bubble.any_running())
     check('pending badge = 1',
           bubble.pending_by_habit.get('Meditation') == 1)
+    check('ack poll armed fast at stop time (not on the next idle tick)',
+          bubble.ack_timer.isActive()
+          and bubble.ack_timer.interval() == widget_mod.ACK_POLL_FAST_MS)
     check('pending tooltip explains the dot',
           'waiting for the phone'
           in '\n'.join(bubble.squares[0].tooltip_lines()))
@@ -230,6 +233,8 @@ def main() -> int:
     bubble._poll_acks()
     check('ack poll clears badge',
           bubble.pending_by_habit.get('Meditation', 0) == 0)
+    check('ack poll relaxes once the queue drains',
+          bubble.ack_timer.interval() == widget_mod.ACK_POLL_IDLE_MS)
     check('ack tooltip explains the flash',
           'phone confirmed'
           in '\n'.join(bubble.squares[0].tooltip_lines()))
@@ -237,6 +242,76 @@ def main() -> int:
     check('tooltip reverts to name + today line',
           bubble.squares[0].tooltip_lines() ==
           ['Meditation', 'today: 150 min (5 sessions)'])
+
+    # ── auto-stop grace period (debounced auto-detect stops) ───────────
+    print('[2b] auto-stop grace period')
+    bubble.on_square_clicked(bubble.squares[0])       # start Meditation
+    sess_start = datetime.now() - timedelta(minutes=10)
+    bubble.timers['Meditation'] = sess_start
+    bubble.request_auto_stop('Meditation')
+    stopped_at = datetime.now() - timedelta(seconds=20)
+    bubble.pending_auto_stops['Meditation'] = stopped_at
+    grace = bubble._grace_timers.get('Meditation')
+    check('grace keeps the timer running (not stopped yet)',
+          'Meditation' in bubble.timers)
+    check('grace timer armed single-shot for the full grace period',
+          grace is not None and grace.isActive() and grace.isSingleShot()
+          and grace.interval() == widget_mod.AUTO_STOP_GRACE_MS)
+    check('timer in grace counts as not-running for auto-detect',
+          'Meditation' in bubble.timers
+          and 'Meditation' in bubble.pending_auto_stops)
+
+    # returning within the grace period continues the SAME session
+    bubble.cancel_pending_stop('Meditation')
+    check('return within the grace period continues the session',
+          'Meditation' in bubble.timers
+          and 'Meditation' not in bubble.pending_auto_stops
+          and 'Meditation' not in bubble._grace_timers)
+
+    # grace expiry → one event, finish time retroactive at activity stop
+    bubble.request_auto_stop('Meditation')
+    stopped_at = datetime.now() - timedelta(seconds=20)
+    bubble.pending_auto_stops['Meditation'] = stopped_at
+    n_events = len(STATE['events'])
+    bubble._finalize_auto_stop('Meditation')
+    new_evs = STATE['events'][n_events:]
+    check('grace expiry queues exactly one event',
+          len(new_evs) == 1 and new_evs[0]['habit'] == 'Meditation')
+    check('finish time is retroactive (activity stop, not expiry)',
+          new_evs and new_evs[0]['end'] == stopped_at.strftime('%H:%M:%S'))
+    check('minutes measured up to the activity stop',
+          new_evs and new_evs[0]['minutes'] == 9
+          and new_evs[0]['kind'] == 'session')
+    check('timer gone after finalize',
+          'Meditation' not in bubble.timers
+          and 'Meditation' not in bubble.pending_auto_stops)
+
+    # manual stop mid-grace finalizes immediately (no grace wait)
+    bubble.on_square_clicked(bubble.squares[0])       # start again
+    bubble.request_auto_stop('Meditation')
+    bubble.on_square_clicked(bubble.squares[0])       # manual stop
+    check('manual stop during grace bypasses the debounce',
+          'Meditation' not in bubble.timers
+          and 'Meditation' not in bubble.pending_auto_stops
+          and 'Meditation' not in bubble._grace_timers)
+
+    # pending stops survive a restart via state.json
+    bubble.on_square_clicked(bubble.squares[0])       # start once more
+    bubble.request_auto_stop('Meditation')
+    bubble._save_state()
+    with open(widget_mod.STATE_FILE) as f:
+        saved = json.load(f)
+    check('pending stop persisted to state.json',
+          'Meditation' in (saved.get('pending_stops') or {}))
+    bubble._finalize_auto_stop('Meditation')          # leave state clean
+
+    # drain the queue like the phone so section [3] starts from the
+    # same clean state the original flow had (pending/flash squares
+    # are deliberately kept out of the black hole)
+    evs = sync.pending_events()
+    post_acks_like_phone([e['id'] for e in evs])
+    bubble._poll_acks()
+    bubble.squares[0].acked_flash_until = 0.0
 
     # ── ring layout + backdate (right-click menu) ──────────────────────
     print('[3] ring layout + backdate')
