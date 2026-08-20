@@ -185,9 +185,14 @@ def main() -> int:
     # deterministic tooltip stats: temp habitsdb with known today counts
     tmp_db = os.path.join(tempfile.gettempdir(),
                           'pc_widget_smoke_habitsdb.json')
+    today = date.today().isoformat()
     with open(tmp_db, 'w') as f:
-        json.dump({'Meditation': {date.today().isoformat(): 5},
-                   'Reading': {date.today().isoformat(): 2}}, f)
+        # Meditation is minutes-primary: its raw slot is the session
+        # tally, minutes live in the minutes:<habit> slot (150/30 = 5
+        # pts, keeping the bubble total at 7 pts with Reading's 2)
+        json.dump({'Meditation': {today: 5},
+                   'minutes:Meditation': {today: 150},
+                   'Reading': {today: 2}}, f)
 
     app = QApplication([])
     bubble = BubbleWidget()
@@ -215,9 +220,9 @@ def main() -> int:
     check('pending tooltip explains the dot',
           'waiting for the phone'
           in '\n'.join(bubble.squares[0].tooltip_lines()))
-    check('square tooltip shows today count + unit',
+    check('square tooltip headlines minutes + session count',
           bubble.squares[0].tooltip_lines()[:2] ==
-          ['Meditation', 'today: 5 min'])
+          ['Meditation', 'today: 150 min (5 sessions)'])
 
     # phone acks → badge clears on poll
     evs = sync.pending_events()
@@ -231,7 +236,7 @@ def main() -> int:
     bubble.squares[0].acked_flash_until = 0.0
     check('tooltip reverts to name + today line',
           bubble.squares[0].tooltip_lines() ==
-          ['Meditation', 'today: 5 min'])
+          ['Meditation', 'today: 150 min (5 sessions)'])
 
     # ── ring layout + backdate (right-click menu) ──────────────────────
     print('[3] ring layout + backdate')
@@ -288,8 +293,12 @@ def main() -> int:
     check('leaving the widget contracts the ring (Wayland path)',
           not bubble._near)
     bubble._apply_layout_now()
-    check('idle squares tucked again',
-          all(abs(s._radius - TUCK_R) < 0.5 for s in bubble.squares))
+    check('idle squares tucked again (pending square stays out)',
+          all(abs(s._radius - TUCK_R) < 0.5 for s in bubble.squares
+              if not (s.running or s.pending
+                      or time.time() < s.acked_flash_until))
+          and any(s.pending > 0 and abs(s._radius - REST_R) < 0.5
+                  for s in bubble.squares))
 
     # ── square click vs drag ───────────────────────────────────────────
     print('[5] square click vs drag')
@@ -330,6 +339,10 @@ def main() -> int:
     check('habit_today reads the db',
           s.habit_today('Meditation') == 5 and s.habit_today('Reading') == 2)
     check('unknown habit → 0', s.habit_today('Nope') == 0)
+    check('minutes slot read for minutes-primary habits',
+          s.habit_minutes_today('Meditation') == 150
+          and s.habit_minutes_today('Reading') == 0
+          and s.habit_minutes_today('Nope') == 0)
     check('summary shows today total', s.summary_lines()[0] == 'today: 7 pts')
     check('missing db → empty summary',
           Stats('/nonexistent/habitsdb.json').summary_lines() == [])
@@ -356,6 +369,18 @@ def main() -> int:
         (target, text))
     widget_mod.hide_tip_text = lambda: shown.clear()
 
+    # _show_tooltip resolves the target from QCursor.pos() at display
+    # time — pin it far outside so the offscreen platform's default
+    # position can't accidentally sit on some square
+    orig_qcursor = widget_mod.QCursor
+
+    class PinnedCursor:
+        @staticmethod
+        def pos():
+            return widget_mod.QPoint(-10000, -10000)
+
+    widget_mod.QCursor = PinnedCursor
+
     bubble._hover_entered(bubble.squares[0])
     bubble.request_tooltip(bubble.squares[0])
     check('tooltip request arms the show timer', bubble._tip_timer.isActive())
@@ -363,9 +388,31 @@ def main() -> int:
     check('square hover shows its own message at the cursor',
           bool(shown) and shown[-1][0] is bubble.squares[0]
           and 'Meditation' in shown[-1][1]
-          and 'today: 5 min' in shown[-1][1])
+          and 'today: 150 min' in shown[-1][1])
     bubble._hover_left(bubble.squares[0])
     check('leaving the square hides the tooltip', not shown)
+
+    # display-time retargeting: the container's Enter can arrive AFTER
+    # a square's (stealing _tip_target), and a square gliding under a
+    # stationary cursor while the ring spreads never gets an Enter at
+    # all — whichever square is geometrically under the cursor must win
+    bubble._hover_entered(bubble)          # spread the ring first…
+    bubble._apply_layout_now()             # …and snap the squares out
+    over_sq = bubble.mapToGlobal(bubble.squares[0].geometry().center())
+
+    class OverSquareCursor:
+        @staticmethod
+        def pos():
+            return over_sq
+
+    widget_mod.QCursor = OverSquareCursor
+    bubble.request_tooltip(bubble)         # container wins the race…
+    wait()
+    check('square under the cursor outranks the container tip',
+          bool(shown) and shown[-1][0] is bubble.squares[0]
+          and 'Meditation' in shown[-1][1])
+    widget_mod.QCursor = PinnedCursor
+    bubble._hover_left(bubble)
 
     bubble._hover_entered(bubble)
     bubble.request_tooltip(bubble)
@@ -377,6 +424,7 @@ def main() -> int:
     bubble._hover_left(bubble)
     check('leaving the bubble hides the tooltip', not shown)
     widget_mod.show_tip_text, widget_mod.hide_tip_text = orig_show, orig_hide
+    widget_mod.QCursor = orig_qcursor
 
     # ── black-hole collapse + Android tier colours ──────────────────────
     print('[7] black-hole collapse + habit colours')
@@ -421,9 +469,17 @@ def main() -> int:
     check('day totals sum effective points, not raw minutes',
           s2.summary_lines()[0] == 'today: 3 pts')
 
-    # minutes-primary with zero minutes falls back to the session count
-    check('widget Meditation (5 sessions, no minutes) → 5 via fallback',
+    # minutes-primary with minutes logged: minutes/divider (150/30 → 5)
+    check('widget Meditation (150 min / 30) → 5 pts',
           bubble.stats.habit_effective('Meditation') == 5)
+
+    # minutes-primary with zero minutes falls back to the session count
+    s_fb = Stats(tmp_db)
+    s_fb.set_point_config([{'name': 'Meditation', 'minutes_primary': True}])
+    s_fb.refresh()
+    s_fb._slot_days.pop('minutes:Meditation')   # simulate a 0-minute day
+    check('zero minutes → session count stands in (5 sessions → 5)',
+          s_fb.habit_effective('Meditation') == 5)
 
     # point config also comes from a tail backup's settings block:
     # dividers, minutes-primary flags, inverted-binary habits
@@ -487,9 +543,24 @@ def main() -> int:
           and bubble.core.tail_pm.height() == BUBBLE_D - 4)
 
     bubble._near = False
+    for s in bubble.squares:      # strip indicator state first…
+        s.pending = 0
+        s.acked_flash_until = 0.0
     bubble._apply_layout_now()
     check('idle squares collapse fully behind the bubble',
           all(s._tuck_progress() > 0.99 for s in bubble.squares))
+    med = next(s for s in bubble.squares if s.habit_name == 'Meditation')
+    med.pending = 1              # …then prove indicators keep squares out
+    bubble._apply_layout_now()
+    check('pending square stays out of the black hole',
+          med._radius >= REST_R - 0.5)
+    med.pending = 0
+    med.acked_flash_until = time.time() + 5.0
+    bubble._apply_layout_now()
+    check('acked-flash square stays out too',
+          med._radius >= REST_R - 0.5)
+    med.acked_flash_until = 0.0
+    bubble._apply_layout_now()
     check('tucked squares reach well behind the circle',
           TUCK_R + SQUARE_D // 2 - BUBBLE_D // 2 > SQUARE_D // 3)
     body = bubble.squares[0]._render_body()

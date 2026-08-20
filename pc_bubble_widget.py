@@ -43,6 +43,7 @@ from pc_widget_sync import (
     load_config, append_event, pending_events,
 )
 from pc_widget_stats import HabitStats, habit_style
+from auto_detect import AutoDetectController, open_window_picker
 
 try:
     from habit_colors import get_habit_icon_path
@@ -95,6 +96,23 @@ def fmt_elapsed(seconds: int) -> str:
     return '{}:{:02d}:{:02d}'.format(h, m, s) if h else '{:02d}:{:02d}'.format(m, s)
 
 
+def _tint_pixmap_white(pm: QPixmap) -> QPixmap:
+    """
+    Recolours an icon to solid white (Android-app style): keep the
+    alpha mask, replace every colour with white.
+    """
+    if pm.isNull():
+        return pm
+    tinted = QPixmap(pm.size())
+    tinted.fill(Qt.transparent)
+    p = QPainter(tinted)
+    p.drawPixmap(0, 0, pm)
+    p.setCompositionMode(QPainter.CompositionMode_SourceIn)
+    p.fillRect(tinted.rect(), QColor(255, 255, 255))
+    p.end()
+    return tinted
+
+
 class HabitSquare(QWidget):
     """One habit square: click to start/stop its timer."""
 
@@ -120,9 +138,10 @@ class HabitSquare(QWidget):
         if path and os.path.exists(path):
             pm = QPixmap(path)
             if not pm.isNull():
-                return pm.scaled(
+                pm = pm.scaled(
                     SQUARE_D - 18, SQUARE_D - 26,
                     Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                return _tint_pixmap_white(pm)
         return QPixmap()
 
     def tooltip_lines(self):
@@ -134,10 +153,20 @@ class HabitSquare(QWidget):
         """
         win = self.window()
         win.stats.refresh()
-        unit = 'min' if self.minutes_primary else 'pts'
-        lines = [self.habit_name,
-                 'today: {} {}'.format(win.stats.habit_today(self.habit_name),
-                                       unit)]
+        if self.minutes_primary:
+            # the raw slot counts SESSIONS — headline the minutes the
+            # phone writes to minutes:<habit>, session tally as the
+            # detail (mirrors the Android habit screen's
+            # "22 minutes, 3 timestamps")
+            minutes = win.stats.habit_minutes_today(self.habit_name)
+            sessions = win.stats.habit_today(self.habit_name)
+            today = ('today: {} min ({} session{})'.format(
+                minutes, sessions, '' if sessions == 1 else 's')
+                if sessions else 'today: {} min'.format(minutes))
+        else:
+            today = 'today: {} pts'.format(
+                win.stats.habit_today(self.habit_name))
+        lines = [self.habit_name, today]
         if time.time() < self.acked_flash_until:
             lines.append('phone confirmed ✓')
         elif self.pending > 0:
@@ -332,6 +361,7 @@ class BubbleWidget(QWidget):
         self.squares = []                 # type: list
         self.timers = {}                  # habit name -> datetime (start)
         self.pending_by_habit = {}        # habit name -> queued count
+        self.auto_note_toggle = None      # set by PcBubbleApp (auto-detect)
         self._drag_offset = None          # type: QPoint | None
         self._config_sig = None          # (name, icon, minutes_primary) tuple
         self._spread_r = REST_R           # spread ring radius (per habit count)
@@ -472,13 +502,16 @@ class BubbleWidget(QWidget):
     def _target_radius(self, sq: HabitSquare) -> float:
         """
         Idle squares tuck in close to the bubble (overlapping) while the
-        mouse is away; running timers always stay out at rest radius so
-        they stay prominent, and an approaching mouse spreads the whole
-        ring out so every square is easy to click.
+        mouse is away; squares with ANY indicator — a running timer, a
+        queued-events dot or the green just-acked flash — always stay
+        out at rest radius so they stay prominent, and an approaching
+        mouse spreads the whole ring out so every square is easy to click.
         """
         if self._near:
             return float(self._spread_r)
-        return float(REST_R if sq.running else TUCK_R)
+        has_indicator = (sq.running or sq.pending > 0
+                         or time.time() < sq.acked_flash_until)
+        return float(REST_R if has_indicator else TUCK_R)
 
     def _place_square(self, sq: HabitSquare):
         c = self._center()
@@ -594,29 +627,58 @@ class BubbleWidget(QWidget):
         self._hide_tooltip()
         name = sq.habit_name
         if name not in self.timers:
-            self.timers[name] = datetime.now()
-            sq.running = True
-            self._raise_running()
-            self._kick_anim()
-            sq.update()
-            self.update()
-            self._save_state()
+            self.start_timer(name)
+        else:
+            self.stop_timer(name)
+        if self.auto_note_toggle is not None:
+            self.auto_note_toggle(name, name in self.timers)
+
+    def start_timer(self, habit_name: str) -> bool:
+        """Starts a habit's timer (manual click or auto-detect)."""
+        if habit_name in self.timers:
+            return False
+        self.timers[habit_name] = datetime.now()
+        for sq in self.squares:
+            if sq.habit_name == habit_name:
+                sq.running = True
+        self._raise_running()
+        self._kick_anim()
+        for sq in self.squares:
+            if sq.habit_name == habit_name:
+                sq.update()
+        self.update()
+        self._save_state()
+        return True
+
+    def stop_timer(self, habit_name: str):
+        """
+        Stops a habit's timer, queues the event on the bridge and
+        flashes the confirmation. No-op when no timer is running.
+        """
+        start = self.timers.pop(habit_name, None)
+        if start is None:
             return
-        start = self.timers.pop(name)
-        sq.running = False
+        for sq in self.squares:
+            if sq.habit_name == habit_name:
+                sq.running = False
         self._kick_anim()
         elapsed = (datetime.now() - start).total_seconds()
         minutes = int(elapsed // 60)
         kind = 'session' if minutes > 0 else 'tap'
-        event_id = append_event(name, kind=kind, start=start, minutes=minutes)
+        event_id = append_event(habit_name, kind=kind, start=start,
+                                minutes=minutes)
         if event_id:
-            self.pending_by_habit[name] = self.pending_by_habit.get(name, 0) + 1
+            self.pending_by_habit[habit_name] = \
+                self.pending_by_habit.get(habit_name, 0) + 1
         self._apply_pending_badges()
-        sq.update()
+        for sq in self.squares:
+            if sq.habit_name == habit_name:
+                sq.update()
         self.update()
         self._save_state()
         self.window().show_flash(
-            name, minutes if kind == 'session' else 0, event_id is not None)
+            habit_name, minutes if kind == 'session' else 0,
+            event_id is not None)
 
     def elapsed_for(self, habit_name: str) -> int:
         start = self.timers.get(habit_name)
@@ -662,6 +724,9 @@ class BubbleWidget(QWidget):
             sq.pending = by_habit.get(sq.habit_name, 0)
             sq.update()
         self._apply_pending_badges()
+        # fast follow-up while anything is queued (the phone long-polls,
+        # so acks land within ~a second); relax when the queue is empty
+        self.ack_timer.setInterval(2000 if self.pending_by_habit else 30000)
 
     def _apply_pending_badges(self):
         for sq in self.squares:
@@ -687,10 +752,39 @@ class BubbleWidget(QWidget):
         self._tip_target = None
         hide_tip_text()
 
+    def _square_at_cursor(self):
+        """
+        The habit square geometrically under the cursor, if any — the
+        display-time truth for tooltip targeting. Qt's Enter events
+        can't be trusted here: the container's Enter may be delivered
+        AFTER a square's (stealing _tip_target), and a square gliding
+        under a stationary cursor while the ring spreads never receives
+        one at all. Tucked squares hide behind the center circle (which
+        is raised above them), so positions inside the core circle
+        belong to the center bubble, never to them.
+        """
+        pos = self.mapFromGlobal(QCursor.pos())
+        if not self.rect().contains(pos):
+            return None
+        c = self._center()
+        if math.hypot(pos.x() - c.x(), pos.y() - c.y()) <= BUBBLE_D / 2:
+            return None          # the center circle (or a tucked square)
+        for sq in self.squares:
+            if sq.geometry().contains(pos):
+                return sq
+        return None
+
     def _show_tooltip(self):
-        target = self._tip_target
-        if target is None or target not in self._hover_set:
-            return
+        target = self._square_at_cursor()
+        if target is None:
+            # no square under the cursor: the container's own message
+            # when it (or the mouse-transparent core over it) is hovered
+            target = self if self in self._hover_set else self._tip_target
+            if target is None or target not in self._hover_set:
+                return
+        # (a geometrically-resolved square skips the hover_set guard —
+        #  the cursor being inside its rect is stronger evidence than
+        #  Enter tracking, which is exactly what fails in the races above)
         lines = target.tooltip_lines()
         if lines:
             esc = [html.escape(l) for l in lines]
@@ -962,6 +1056,27 @@ class PcBubbleApp:
         self.bubble.open_square_menu = self.open_square_menu
         self.bubble.show_flash = self.show_flash
 
+        # window-activity auto start/stop for mapped habits
+        self.auto = AutoDetectController(
+            is_running=lambda h: h in self.bubble.timers,
+            on_start=self._auto_started,
+            on_stop=self._auto_stopped,
+            on_info=lambda msg: FlashLabel(msg, self.bubble),
+            habits_provider=lambda: {sq.habit_name
+                                     for sq in self.bubble.squares},
+        )
+        self.bubble.auto_note_toggle = self.auto.note_manual_toggle
+        self.auto.start()
+
+    def _auto_started(self, habit: str):
+        if self.bubble.start_timer(habit):
+            cls = self.auto.mapping_for(habit)
+            FlashLabel('{} ▶ auto ({})'.format(habit, cls or 'window'),
+                       self.bubble)
+
+    def _auto_stopped(self, habit: str):
+        self.bubble.stop_timer(habit)   # flashes the synced minutes itself
+
     def on_tray_activated(self, reason):
         if reason in (QSystemTrayIcon.Trigger, QSystemTrayIcon.DoubleClick):
             if not self.bubble.isVisible():
@@ -1009,10 +1124,35 @@ class PcBubbleApp:
 
         act.setProperty('keep_open', True)
         act.triggered.connect(backdate_one_more)
+
+        # window auto-detect: pair this habit with an open window type
+        menu.addSeparator()
+        mapping = self.auto.mapping_for(sq.habit_name)
+        if mapping:
+            cur = menu.addAction('🎯 Auto-detect: {}'.format(mapping))
+            cur.setEnabled(False)
+            off = menu.addAction('✖ Stop auto-detecting')
+            off.triggered.connect(
+                lambda: self._clear_auto_mapping(sq.habit_name))
+        else:
+            pick = menu.addAction('🎯 Auto-detect window…')
+            pick.triggered.connect(lambda: open_window_picker(
+                self.auto, sq.habit_name,
+                lambda cls: self._set_auto_mapping(sq.habit_name, cls)))
+
         bubble._pin_spread = True   # keep the ring spread under the menu
         menu.exec_(global_pos)
         bubble._pin_spread = False
         bubble._check_proximity()
+
+    def _set_auto_mapping(self, habit: str, window_class: str):
+        self.auto.set_mapping(habit, window_class)
+        FlashLabel('{} ↔ {} auto-detect ON'.format(habit, window_class),
+                   self.bubble)
+
+    def _clear_auto_mapping(self, habit: str):
+        self.auto.clear_mapping(habit)
+        FlashLabel('{} auto-detect OFF'.format(habit), self.bubble)
 
     def show_flash(self, habit: str, minutes: int, queued: bool):
         if minutes > 0:
@@ -1024,6 +1164,7 @@ class PcBubbleApp:
         FlashLabel(text, self.bubble)
 
     def quit(self):
+        self.auto.stop()
         self.bubble._save_state()
         self.tray.hide()
         self.qapp.quit()

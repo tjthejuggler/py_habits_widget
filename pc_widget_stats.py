@@ -186,6 +186,15 @@ class HabitStats:
         """A habit's RAW count for today (0 when unknown/missing)."""
         return self._habit_today.get(name, 0)
 
+    def habit_minutes_today(self, name: str) -> int:
+        """
+        Raw minutes logged today in the minutes:<name> slot — the number
+        the phone's habit screen headlines for minutes-primary habits
+        (the parent slot's raw count is the session tally, not minutes).
+        """
+        return self._slot_days.get('minutes:' + name, {}).get(
+            self._today_key or date.today().isoformat(), 0)
+
     def habit_effective(self, name: str) -> int:
         """
         The points the phone would show for this habit today: the raw

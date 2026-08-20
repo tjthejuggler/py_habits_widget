@@ -1,18 +1,13 @@
-# ADR: PC-widget point config now flows through the bridge config channel
+## ADR: Display-time geometric tooltip targeting (2026-08-20)
 
-**Date:** 2026-08-19
-**Status:** Accepted (deployed)
+**Context:** Hovering a habit square usually showed the center bubble's summary instead of the square's own message. Root cause: `request_tooltip()` was last-writer-wins on `_tip_target`, and Qt's Enter delivery is unreliable for this widget in two ways — (1) the container's Enter can be delivered AFTER a child square's, letting the container steal the target; (2) a square that glides under a *stationary* cursor during the ring-spread animation never receives an Enter at all (Qt does not synthesize enter on widget move under a still pointer on Wayland).
 
-## Context
-The PC bubble widget computes square colours from *effective points* (raw ÷ divider, plus inverted-binary / noPoints subtypes). Until now the PC could only learn dividers/flags by mining the newest parseable phone backup (`~/habitsdb/Auto_backups/`, daily, frequently mid-sync) or the manual `~/.config/pc_bubble_widget/point_overrides.json`. The bridge config channel (`pc_widget/config`, pushed by the phone on settings changes and app startup, polled by the widget every 20 s) only carried `name`/`icon`/`minutes_primary` — and the bridge's POST sanitizer stripped everything else, including `divider`.
+**Decision:** Tooltip targets are resolved GEOMETRICALLY at display time, not from enter/leave tracking. `BubbleWidget._square_at_cursor()` maps `QCursor.pos()` into widget coords and returns the square whose rect contains it; positions inside the center circle (BUBBLE_D/2 of center) belong to the center bubble — this is what keeps tucked squares (which hide behind the raised core) from hijacking the bubble's own hover. The geometrically-resolved square deliberately SKIPS the `_hover_set` guard (the cursor being inside its rect is stronger evidence than Enter tracking, which is exactly what fails in the races above); the guard only applies to the fallback targets (container / tracked `_tip_target`). QCursor.pos() is safe here even on Wayland: Qt caches the pointer position from motion events while the pointer is over our window, and a `rect().contains` check rejects stale frozen readings.
 
-## Decision
-1. Phone (`HabitViewModel.pushPcWidgetConfig`) now sends `divider` (habitDividers, default 1), `inverted_binary`, and `no_points` per habit.
-2. Bridge (`tail_bridge/bridge_server.py pc_widget_set_config`) passes them through its sanitizer: `divider` validated as int ≥ 1 else null; booleans passed as bool else null. **null = "phone hasn't sent the field yet"**, not false.
-3. Widget (`pc_widget_sync.load_config`) forwards the three fields (None when absent/null).
-4. Stats (`pc_widget_stats.HabitStats`): `set_point_config` stores per-habit flags; `_effective_on` resolves each input with precedence **bridge config field (when non-null) > point_overrides.json (dividers/minutes only) > newest parseable backup > default (30 for minutes-primary, else 1)**. A config `false` deliberately overrides a stale backup `true`.
+**Consequence:** `request_tooltip()` merely arms the 600 ms timer; what shows is decided by where the cursor actually is when the timer fires. Enter/leave tracking remains for spread/contract of the ring and for hiding tips on leave.
 
-## Consequences
-- Divider tweaks reach the widget in seconds instead of up to a day; backup mining and overrides remain as fallback layers, so the widget keeps working with an old phone build or a down bridge.
-- Rollout is order-independent: any hop still on old code yields null/absent fields and the previous behaviour is preserved.
-- Smoke test (`pc_widget_smoke_test.py`) covers pass-through validation and config-beats-backup precedence for all three fields.
+## ADR: Minutes-primary tooltips read the minutes: slot (2026-08-20)
+
+**Context:** The per-square "today" line used `HabitStats.habit_today()` — the habit's RAW slot count, which for minutes-primary habits is the session TALLY (each timer stop = +1 timestamp), not minutes. "Programming sessions" showed "3 min" while the phone correctly showed 22 minutes across 3 sessions.
+
+**Decision:** Added `HabitStats.habit_minutes_today(name)` reading the `minutes:<name>` slot (the number the phone's habit screen headlines). Minutes-primary squares now render "today: N min (M sessions)"; count-based habits keep "today: N pts". Effective-points math (`habit_effective`, day totals) is unchanged — it already scored minutes through the divider.

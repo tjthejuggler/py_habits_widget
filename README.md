@@ -228,3 +228,84 @@ tray click or menu recalls the bubble next to the tray.
 - Running timers are restored as "running" squares after a restart
   (previously the persisted timer kept counting but its square painted as
   idle).
+
+## PC Bubble Widget — Window Auto-Detect Timers
+
+*(Added 2026-08-20)*
+
+Right-click a habit square → **"🎯 Auto-detect window…"** pops up every
+open window type (deduplicated by app class — four VSCode windows list as
+one `code` entry, hover shows a sample title). Pick one and that habit's
+timer runs itself whenever you actually use that app:
+
+- **Auto-start** when the paired window is the active (focused, not
+  minimized) window AND you typed/clicked within the last 15 s — alt-tab
+  alone doesn't start it, typing does.
+- **Auto-stop** when you switch away or minimize the window, or after
+  15 s of no keyboard/mouse input at all.
+- **Manual always wins**: clicking the square stops the timer and
+  suppresses auto-start until you leave that window once (so it can't
+  fight you); timers you started by hand are never auto-stopped.
+- Nothing is hardcoded — any habit ↔ any window class, several habits
+  can be paired at once, and pairs persist in
+  `~/.config/pc_bubble_widget/auto_detect.json` (idle timeout lives
+  there too, `idle_seconds`).
+
+How it works on this KDE/Wayland machine (`auto_detect.py`):
+
+- A resident KWin script (loaded over DBus like the keep-above one)
+  pushes active-window/minimize events to a `org.pyhabits.AutoDetect`
+  DBus service the widget registers; a one-shot KWin script answers the
+  window listing. On plain X11 it falls back to `wmctrl -lx` +
+  `xdotool` polling instead.
+- "Typing or clicking" is detected by passively reading the evdev
+  devices (`/dev/input/event*`, filtered to key-capable ones) in a
+  daemon thread — the reason the user must be in the `input` group.
+  Without that permission the idle-stop rule is disabled and focus
+  alone drives the timer (a flash warns once).
+- Desktop plumbing (plasmashell, xwaylandvideobridge, …) and the
+  widget's own windows are filtered out of the picker.
+
+## PC Bubble Widget — Fast Sync, Visible Indicators, White Icons
+
+*(Added 2026-08-20)*
+
+- **Near-instant phone sync** *(2026-08-20)*: stopping a timer used to
+  wait on two stacked delays — the phone's bubble service polled the
+  bridge every 45 s, and the widget only noticed acks every 30 s. The
+  bridge now has a long-poll endpoint
+  (`GET /api/v1/pc_widget/events/wait?timeout=N`) that holds the
+  request open until an event is queued, the phone's bubble service
+  uses it in a wait→drain→repeat loop (falling back to the 45 s poll
+  on bridges without it), and the widget polls acks every 2 s while
+  anything is queued (30 s when idle). Net effect: a stopped timer
+  lands on the phone and clears its orange dot in ~1–3 s.
+- **Indicator squares never collapse** *(2026-08-20)*: any square with
+  something to say — a running timer, an orange queued-events dot, or
+  the green just-acked flash — now stays out at rest radius instead of
+  tucking behind the bubble; only fully idle squares still collapse.
+- **White habit icons** *(2026-08-20)*: square icons are recoloured to
+  solid white (alpha mask kept), matching the Android app's look.
+
+## PC Bubble Widget — Reliable Hover Tooltips, Correct Minutes
+
+*(Added 2026-08-20)*
+
+- **Hover always targets the right square** *(2026-08-20)*: hovering a
+  habit square often showed the center bubble's summary instead. Two
+  Qt event races were to blame: the container's Enter can be delivered
+  *after* the square's (stealing the tooltip target), and a square
+  gliding under a *stationary* cursor while the ring spreads never
+  receives an Enter at all. The tooltip target is now resolved
+  geometrically at display time (`_square_at_cursor`): whichever
+  square's rect contains the cursor wins; positions inside the center
+  circle belong to the bubble (tucked squares hide behind it), and the
+  old enter/leave tracking only fills in when no square is under the
+  cursor.
+- **Minutes-primary tooltips show real minutes** *(2026-08-20)*: the
+  per-square "today" line printed the habit's raw slot count — the
+  session *tally* — labelled as minutes ("3 min" when the phone showed
+  22 minutes across 3 sessions). Minutes-primary habits now headline
+  the `minutes:<habit>` slot via `HabitStats.habit_minutes_today()`,
+  with the session count as detail: "today: 24 min (4 sessions)".
+  Count-based habits keep their "today: N pts" line.
