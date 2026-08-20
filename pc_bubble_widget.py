@@ -13,7 +13,10 @@ Idle squares tuck in around the bubble (overlapping) while the mouse is
 away; running timers always stay out at rest radius, and an approaching
 mouse spreads the whole ring so every square is easy to click.
 Right-clicking a square offers a repeatable "Started 1 min earlier"
-action that backdates the running timer.
+action that backdates the running timer, plus "Stop and edit times"
+which finalizes the session with user-corrected start/end times.
+Every right-click menu action carries an icon (system icon theme,
+with the bundled transparent-glass set as fallback).
 
 Lives in the system tray (no taskbar entry). Tray click or menu item
 recalls the bubble next to the tray so it can always be found.
@@ -31,12 +34,13 @@ import html
 import time
 from datetime import datetime, timedelta
 
-from PyQt5.QtCore import Qt, QTimer, QPoint, QRectF
+from PyQt5.QtCore import Qt, QTimer, QPoint, QRectF, QDateTime
 from PyQt5.QtNetwork import QLocalSocket, QLocalServer
 from PyQt5.QtGui import (QIcon, QPixmap, QPainter, QColor, QFont, QPen,
                          QFontMetrics, QCursor)
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QSystemTrayIcon, QMenu, QAction, QToolTip,
+    QDialog, QDateTimeEdit, QFormLayout, QDialogButtonBox, QLabel,
 )
 
 from pc_widget_sync import (
@@ -55,6 +59,22 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 TAIL_ICON = os.path.join(SCRIPT_DIR, 'icons', 'tail_icon.png')
 STATE_FILE = os.path.expanduser('~/.config/pc_bubble_widget/state.json')
 INSTANCE_KEY = 'pc-bubble-widget-singleton'
+ICON_SET_DIR = os.path.join(SCRIPT_DIR, 'icons', 'transparentglasshd')
+
+
+def menu_icon(png_name, *theme_names):
+    """
+    Icon for a right-click menu action. Prefers the system icon theme
+    (Breeze on KDE — scales crisply and matches the desktop), falling
+    back to the bundled transparent-glass icon set so every action
+    still gets an icon on themeless setups.
+    """
+    for theme_name in theme_names:
+        icon = QIcon.fromTheme(theme_name)
+        if not icon.isNull():
+            return icon
+    path = os.path.join(ICON_SET_DIR, png_name)
+    return QIcon(path) if os.path.exists(path) else QIcon()
 
 
 def show_tip_text(pos, text, target):
@@ -669,27 +689,31 @@ class BubbleWidget(QWidget):
         self._save_state()
         return True
 
-    def stop_timer(self, habit_name: str, end=None):
+    def stop_timer(self, habit_name: str, end=None, start=None):
         """
         Stops a habit's timer, queues the event on the bridge and
         flashes the confirmation. No-op when no timer is running.
         `end` overrides the finish time — auto-detect finalizes
         retroactively at the moment window activity stopped, after
-        its grace period lapsed.
+        its grace period lapsed. `start` overrides the session start
+        (right-click "Stop and edit": the timer began at the wrong
+        time); minutes are recomputed from the corrected times.
         """
         self._cancel_pending_stop(habit_name)
-        start = self.timers.pop(habit_name, None)
-        if start is None:
+        begun = self.timers.pop(habit_name, None)
+        if begun is None:
             return
+        if start is not None:
+            begun = start
         for sq in self.squares:
             if sq.habit_name == habit_name:
                 sq.running = False
         self._kick_anim()
         finish = end or datetime.now()
-        elapsed = (finish - start).total_seconds()
+        elapsed = (finish - begun).total_seconds()
         minutes = int(elapsed // 60)
         kind = 'session' if minutes > 0 else 'tap'
-        event_id = append_event(habit_name, kind=kind, start=start,
+        event_id = append_event(habit_name, kind=kind, start=begun,
                                 minutes=minutes, end=finish)
         if event_id:
             self.pending_by_habit[habit_name] = \
@@ -710,6 +734,30 @@ class BubbleWidget(QWidget):
         self.window().show_flash(
             habit_name, minutes if kind == 'session' else 0,
             event_id is not None)
+
+    def cancel_timer(self, habit_name: str):
+        """
+        Discards a running timer outright: nothing is queued on the
+        bridge, nothing reaches the phone, no event is recorded —
+        the session is forgotten as if it never ran.
+        """
+        self._cancel_pending_stop(habit_name)
+        if self.timers.pop(habit_name, None) is None:
+            return
+        for sq in self.squares:
+            if sq.habit_name == habit_name:
+                sq.running = False
+        self._kick_anim()
+        for sq in self.squares:
+            if sq.habit_name == habit_name:
+                sq.update()
+        self.update()
+        self._save_state()
+        FlashLabel('{} ✖ timer discarded'.format(habit_name), self)
+        if self.auto_note_toggle is not None:
+            # a mapped habit must not be instantly auto-restarted by
+            # the still-focused window — same rule as a manual stop
+            self.auto_note_toggle(habit_name, False)
 
     # ── auto-stop grace period (debounce) ───────────────────────────────
 
@@ -1113,6 +1161,47 @@ class FlashLabel(QWidget):
         p.end()
 
 
+class StopEditDialog(QDialog):
+    """
+    "Stop and edit" popup: corrects a session's start/end times before
+    the stop is finalized and queued to the bridge. OK stops the timer
+    with the edited times; Cancel leaves the timer running untouched.
+    """
+
+    def __init__(self, habit_name: str, start: datetime, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle('Stop timer — {}'.format(habit_name))
+        self.setModal(True)
+        layout = QFormLayout(self)
+        self.start_edit = QDateTimeEdit(QDateTime(start), self)
+        self.end_edit = QDateTimeEdit(QDateTime(datetime.now()), self)
+        for editor in (self.start_edit, self.end_edit):
+            editor.setCalendarPopup(True)
+            editor.setDisplayFormat('yyyy-MM-dd HH:mm')
+        # a session can never end before it began — bump the end
+        # along whenever the start moves past it
+        self.end_edit.setMinimumDateTime(self.start_edit.dateTime())
+        self.start_edit.dateTimeChanged.connect(
+            self.end_edit.setMinimumDateTime)
+        layout.addRow('Started', self.start_edit)
+        layout.addRow('Ended', self.end_edit)
+        hint = QLabel('OK stops the timer and records the corrected '
+                      'times — Cancel keeps it running.')
+        hint.setWordWrap(True)
+        layout.addRow(hint)
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok |
+                                   QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addRow(buttons)
+
+    def start_time(self) -> datetime:
+        return self.start_edit.dateTime().toPyDateTime()
+
+    def end_time(self) -> datetime:
+        return self.end_edit.dateTime().toPyDateTime()
+
+
 class KeepOpenMenu(QMenu):
     """
     QMenu that stays open when an action flagged `keep_open` is clicked,
@@ -1201,11 +1290,14 @@ class PcBubbleApp:
 
     def open_bubble_menu(self, global_pos):
         menu = QMenu()
-        menu.addAction('Recall to tray',
-                       lambda: self.bubble.recall_to_tray())
-        menu.addAction('Hide bubble', self.toggle_bubble)
+        act = menu.addAction('Recall to tray',
+                             lambda: self.bubble.recall_to_tray())
+        act.setIcon(menu_icon('home5.png', 'go-home'))
+        act = menu.addAction('Hide bubble', self.toggle_bubble)
+        act.setIcon(menu_icon('last_arrow_down.png', 'arrow-down'))
         menu.addSeparator()
-        menu.addAction('Quit', self.quit)
+        act = menu.addAction('Quit', self.quit)
+        act.setIcon(menu_icon('power_button4.png', 'application-exit'))
         self.bubble._pin_spread = True   # keep the ring spread under the menu
         menu.exec_(global_pos)
         self.bubble._pin_spread = False
@@ -1223,32 +1315,57 @@ class PcBubbleApp:
             sq.habit_name,
             'running {}'.format(fmt_elapsed(bubble.elapsed_for(sq.habit_name)))
             if running else 'timer idle'))
+        habit_icon = get_habit_icon_path(sq.habit_name)
+        head.setIcon(QIcon(habit_icon) if habit_icon
+                     else menu_icon('clock1.png', 'chronometer'))
         head.setEnabled(False)
         menu.addSeparator()
-        act = menu.addAction('⏪ Started 1 min earlier' if running
+        act = menu.addAction('Started 1 min earlier' if running
                              else 'No timer running')
+        act.setIcon(menu_icon('a_media23_arrows_seek_back.png',
+                              'media-seek-backward', 'edit-undo'))
         act.setEnabled(running)
 
         def backdate_one_more():
             if bubble.backdate_timer(sq.habit_name, 1):
                 start = bubble.timers.get(sq.habit_name)
-                act.setText('⏪ 1 more min earlier (started {})'.format(
+                act.setText('1 more min earlier (started {})'.format(
                     start.strftime('%H:%M') if start else '?'))
 
         act.setProperty('keep_open', True)
         act.triggered.connect(backdate_one_more)
 
+        # stop now, but with corrected times — fixes a timer that
+        # started (or should end) at the wrong moment
+        act = menu.addAction('Stop and edit times…')
+        act.setIcon(menu_icon('pencil1.png', 'document-edit'))
+        act.setEnabled(running)
+        act.triggered.connect(
+            lambda: self.stop_and_edit(sq.habit_name))
+
+        # throw the running session away entirely — nothing is
+        # queued or synced, the timer is simply forgotten
+        act = menu.addAction('Cancel timer (discard)')
+        act.setIcon(menu_icon('trashcan3.png', 'edit-delete',
+                              'edit-clear'))
+        act.setEnabled(running)
+        act.triggered.connect(
+            lambda: bubble.cancel_timer(sq.habit_name))
+
         # window auto-detect: pair this habit with an open window type
         menu.addSeparator()
         mapping = self.auto.mapping_for(sq.habit_name)
         if mapping:
-            cur = menu.addAction('🎯 Auto-detect: {}'.format(mapping))
+            cur = menu.addAction('Auto-detect: {}'.format(mapping))
+            cur.setIcon(menu_icon('binocular.png', 'crosshairs'))
             cur.setEnabled(False)
-            off = menu.addAction('✖ Stop auto-detecting')
+            off = menu.addAction('Stop auto-detecting')
+            off.setIcon(menu_icon('x_solid.png', 'window-close'))
             off.triggered.connect(
                 lambda: self._clear_auto_mapping(sq.habit_name))
         else:
-            pick = menu.addAction('🎯 Auto-detect window…')
+            pick = menu.addAction('Auto-detect window…')
+            pick.setIcon(menu_icon('magnifying_glass_ps.png', 'edit-find'))
             pick.triggered.connect(lambda: open_window_picker(
                 self.auto, sq.habit_name,
                 lambda cls: self._set_auto_mapping(sq.habit_name, cls)))
@@ -1257,6 +1374,21 @@ class PcBubbleApp:
         menu.exec_(global_pos)
         bubble._pin_spread = False
         bubble._check_proximity()
+
+    def stop_and_edit(self, habit_name: str):
+        """
+        Right-click "Stop and edit times": opens the correction popup
+        pre-filled with the running session's times. OK finalizes the
+        stop with whatever the user corrected; Cancel changes nothing
+        and the timer keeps running.
+        """
+        start = self.bubble.timers.get(habit_name)
+        if start is None:
+            return
+        dialog = StopEditDialog(habit_name, start, self.bubble)
+        if dialog.exec_() == QDialog.Accepted:
+            self.bubble.stop_timer(habit_name, start=dialog.start_time(),
+                                   end=dialog.end_time())
 
     def _set_auto_mapping(self, habit: str, window_class: str):
         self.auto.set_mapping(habit, window_class)

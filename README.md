@@ -215,12 +215,12 @@ tray click or menu recalls the bubble next to the tray.
   8 px of movement = a click (toggles the timer on release), 8 px or more =
   the whole widget follows the pointer (compositor-driven move on Wayland).
   This matters because the tucked idle squares cover the bubble at rest.
-- **Right-click a habit square** → per-habit menu with a repeatable
-  **"⏪ Started 1 min earlier"** action: each click pulls the running
-  timer's start another minute into the past (the label shows the resulting
-  start clock time, and the menu stays open for repeated clicks). The
-  backdated start is what gets synced to the phone, and it persists across
-  restarts.
+- **Right-click a habit square** → per-habit menu (every action carries an
+  icon) with a repeatable **"Started 1 min earlier"** action: each click
+  pulls the running timer's start another minute into the past (the label
+  shows the resulting start clock time, and the menu stays open for repeated
+  clicks). The backdated start is what gets synced to the phone, and it
+  persists across restarts.
 - **Tray-only presence:** the KWin startup script now also sets
   `skipTaskbar` on the widget's windows (KDE/Wayland), and the app plus its
   windows carry the tail icon, so any DE that insists on a taskbar entry at
@@ -348,3 +348,35 @@ How it works on this KDE/Wayland machine (`auto_detect.py`):
   the `minutes:<habit>` slot via `HabitStats.habit_minutes_today()`,
   with the session count as detail: "today: 24 min (4 sessions)".
   Count-based habits keep their "today: N pts" line.
+
+## PC Bubble Widget — Stop-and-Edit + Menu Icons
+
+*(Added 2026-08-20)*
+
+- **"Stop and edit times…"** *(2026-08-20)*: new right-click action on a
+  habit square (enabled only while its timer runs). It opens a small modal
+  dialog pre-filled with the session's real start time and "now" as the
+  end, both editable (`QDateTimeEdit` with calendar popups; the end can
+  never be dragged before the start — it bumps along automatically).
+  **OK** stops the timer and queues the event with the corrected times
+  (minutes are recomputed from them, so a fixed start or end fixes the
+  synced duration too); **Cancel** changes nothing and the timer keeps
+  running. Implemented as a `start` override on
+  `BubbleWidget.stop_timer()`, mirroring the existing `end` override the
+  auto-detect grace finalization uses.
+- **Icons on every right-click menu item** *(2026-08-20)*: the square menu
+  (header = the habit's own icon, backdate = seek-back arrows, stop-and-
+  edit = pencil, cancel = trashcan, auto-detect = magnifier/binoculars,
+  stop-auto-detect = ✕) and the bubble menu (home / arrow-down / power)
+  now show icons. Each prefers the system icon theme (Breeze on KDE) and
+  falls back to the bundled `icons/transparentglasshd/` set, so nothing
+  goes icon-less on themeless setups. The old emoji prefixes were dropped
+  in favour of the real icons.
+- **"Cancel timer (discard)"** *(2026-08-20)*: right-click action that
+  throws a running session away **entirely** — `BubbleWidget.cancel_timer()`
+  pops the timer without queueing anything on the bridge, so no event is
+  recorded and nothing is ever sent to the phone; the square simply goes
+  back to idle (a transient "timer discarded" flash confirms it). A pending
+  auto-detect grace stop is dropped too, and the manual-cancel is noted to
+  the auto-detect controller (same rule as a manual stop) so a still-
+  focused mapped window can't instantly re-start what was discarded.
