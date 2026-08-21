@@ -369,8 +369,9 @@ def main() -> int:
     check('running square widget carries the chip margin',
           sq.width() == SQUARE_D_RUN_W)
     sq._render_body()          # populates the chip hit rects
-    check('✕ + ← chip hit rects present while running',
-          sq._x_rect is not None and sq._back_rect is not None)
+    check('✕ + ← + ✎ chip hit rects present while running',
+          sq._x_rect is not None and sq._back_rect is not None
+          and sq._edit_rect is not None)
     check('core hides its chips with a single timer',
           bubble.core.badge_rects() == (None, None))
     other = bubble.squares[1]

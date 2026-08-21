@@ -34,7 +34,8 @@ import html
 import time
 from datetime import datetime, timedelta
 
-from PyQt5.QtCore import Qt, QTimer, QPoint, QRect, QRectF, QDateTime
+from PyQt5.QtCore import (Qt, QTimer, QPoint, QPointF, QRect, QRectF,
+                          QDateTime)
 from PyQt5.QtNetwork import QLocalSocket, QLocalServer
 from PyQt5.QtGui import (QIcon, QPixmap, QPainter, QColor, QFont, QPen,
                          QFontMetrics, QCursor)
@@ -210,6 +211,27 @@ def draw_back_badge(p: QPainter, rect: QRect):
     p.drawLine(rect.left() + m, cy, rect.left() + m + head, cy + head)
 
 
+def draw_edit_badge(p: QPainter, rect: QRect):
+    """✎ chip — a classic pencil: shaft, triangular tip, eraser band."""
+    _badge_box(p, rect, QColor(130, 130, 140))
+    p.save()
+    p.translate(QRectF(rect).center())
+    p.rotate(-45)          # pencil lies along the diagonal, tip down-left
+    shaft = QPen(TEXT_COLOR, 4)
+    shaft.setCapStyle(Qt.FlatCap)
+    p.setPen(shaft)
+    p.drawLine(QPointF(5.0, 0), QPointF(-2.0, 0))     # shaft, eraser right
+    tip = QPen(TEXT_COLOR, 2)
+    tip.setCapStyle(Qt.RoundCap)
+    p.setPen(tip)
+    p.drawLine(QPointF(-2.0, -2.0), QPointF(-6.0, 0))  # triangular point
+    p.drawLine(QPointF(-2.0, 2.0), QPointF(-6.0, 0))
+    band = QPen(OVERLAY_BG, 2)     # eraser band: a gap across the end
+    p.setPen(band)
+    p.drawLine(QPointF(4.0, -2.2), QPointF(4.0, 2.2))
+    p.restore()
+
+
 def draw_countdown_badge(p: QPainter, rect: QRect, seconds_left):
     """Countdown chip — dark box, red border, the two big digits."""
     _badge_box(p, rect, CANCEL_RED)
@@ -236,6 +258,7 @@ class HabitSquare(QWidget):
         self._press_pos = None    # global press pos while click-vs-drag is pending
         self._x_rect = None       # hit rect of the ✕ chip (set while rendering)
         self._back_rect = None    # hit rect of the ← chip (set while rendering)
+        self._edit_rect = None    # hit rect of the ✎ chip (set while rendering)
         self.setFixedSize(SQUARE_D, SQUARE_D)
         self.setMouseTracking(True)   # hover self-heal needs no-button moves
         self.setCursor(Qt.PointingHandCursor)
@@ -327,6 +350,13 @@ class HabitSquare(QWidget):
                     # the right-click menu's backdate option
                     win._hide_tooltip()  # type: ignore[attr-defined]
                     win.backdate_timer(self.habit_name, 1)  # type: ignore[attr-defined]
+                    return
+                if (self._edit_rect is not None
+                        and self._edit_rect.contains(e.pos())):
+                    # the ✎ chip: stop the timer and edit its times —
+                    # same as the right-click menu's "Stop and edit"
+                    win._hide_tooltip()  # type: ignore[attr-defined]
+                    win.stop_and_edit(self.habit_name)  # type: ignore[attr-defined]
                     return
             # click-vs-drag: don't toggle yet — a drag may take over
             self._press_pos = e.globalPos()
@@ -471,9 +501,11 @@ class HabitSquare(QWidget):
                 self.countdown_left)
 
         # ✕ (top-right) discards the timer; ← (bottom-left) pulls its
-        # start 1 min back — both running-only, sticking out likewise
+        # start 1 min back; ✎ (bottom-right) stops it for editing —
+        # all running-only, sticking out past the corners likewise
         self._x_rect = None
         self._back_rect = None
+        self._edit_rect = None
         if self.running:
             xr = QRect(bx + bd - BADGE_D + BADGE_STICK, bx - BADGE_STICK,
                        BADGE_D, BADGE_D)
@@ -483,6 +515,11 @@ class HabitSquare(QWidget):
                        BADGE_D, BADGE_D)
             self._back_rect = br
             draw_back_badge(p, br)
+            er = QRect(bx + bd - BADGE_D + BADGE_STICK,
+                       bx + bd - BADGE_D + BADGE_STICK,
+                       BADGE_D, BADGE_D)
+            self._edit_rect = er
+            draw_edit_badge(p, er)
 
         # sync dot: inside the body's top-right, clear of the ✕ chip
         dot_x = (bx + bd - 26) if self.running else (d - 12)
@@ -1262,6 +1299,9 @@ class BubbleWidget(QWidget):
     def open_square_menu(self, sq: HabitSquare, global_pos):
         """Per-habit right-click menu; replaced by the app host. No-op standalone."""
 
+    def stop_and_edit(self, habit_name: str):
+        """Stop-and-edit dialog; replaced by the app host. No-op standalone."""
+
     # ── state persistence ───────────────────────────────────────────────
 
     _last_save = 0.0
@@ -1542,6 +1582,7 @@ class PcBubbleApp:
         self.bubble.open_bubble_menu = self.open_bubble_menu
         self.bubble.open_square_menu = self.open_square_menu
         self.bubble.show_flash = self.show_flash
+        self.bubble.stop_and_edit = self.stop_and_edit
 
         # window-activity auto start/stop for mapped habits
         self.auto = AutoDetectController(

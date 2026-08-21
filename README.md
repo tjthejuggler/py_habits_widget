@@ -473,3 +473,9 @@ How it works on this KDE/Wayland machine (`auto_detect.py`):
   Smoke tests: new section **[3b]** covers the chips, and the suite
   now deletes its temp state file up front so a crashed run can't
   leak running timers into the next one.
+- **✎ edit chip on running squares** *(2026-08-21)*: bottom-right
+  corner chip (pencil, same rounded style as ✕ / ←) that stops the
+  timer and opens the edit-times dialog — identical to the
+  right-click "Stop and edit" menu entry. Wired through a
+  `stop_and_edit` stub on the bubble that the app host replaces,
+  like the other menu hooks.
