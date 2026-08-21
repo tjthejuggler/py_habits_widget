@@ -27,7 +27,13 @@ Backends (probed in this order, silent no-op when none fits):
 (/dev/input/event*) in a background thread — works on Wayland where
 global input hooks don't exist; requires the user to be in the
 `input` group (checked at runtime; without it the idle-stop rule is
-disabled and focus alone drives the timer).
+disabled and focus alone drives the timer). The thread rescans
+/dev/input periodically: keyboards and mice are re-enumerated on
+every bluetooth reconnect, dock replug and suspend/resume cycle
+(often with a NEW event node), and a monitor that only trusted the
+startup device list eventually goes blind to the devices you
+actually use — every habit then looks "idle" forever and auto-start
+never fires again.
 """
 
 import fcntl
@@ -45,7 +51,7 @@ from PyQt5.QtWidgets import QMenu
 
 try:
     from PyQt5.QtDBus import (QDBusConnection, QDBusAbstractAdaptor,
-                              QDBusMessage)
+                              QDBusMessage, QDBusServiceWatcher)
     HAVE_QTDBUS = True
 except ImportError:          # pragma: no cover - unusual PyQt5 builds
     HAVE_QTDBUS = False
@@ -131,23 +137,36 @@ class InputActivityMonitor:
     Daemon thread that watches all evdev devices that can produce key
     events and timestamps the last real input. Reading evdev does not
     steal events from other readers, so this is passive and safe.
+
+    Devices come and go: a bluetooth keyboard/mouse reconnects with a
+    NEW /dev/input node after every sleep, USB docks replug, receivers
+    re-enumerate. The thread therefore rescans /dev/input periodically
+    (and every second once it holds no devices at all) instead of
+    trusting the device list from startup day — a monitor that never
+    rescans slowly goes blind to the keyboard you actually type on,
+    `idle_seconds()` grows without bound and auto-detect dies of
+    permanent "user is idle".
     """
+
+    RESCAN_SECONDS = 30.0
 
     def __init__(self):
         self.last_activity = time.monotonic()
         self.last_press = 0.0    # last key/button DOWN (movement never counts)
         self.available = False
+        self.rescan_interval = self.RESCAN_SECONDS
         self._stop_evt = threading.Event()
         self._thread = None
 
     def start(self):
-        fds = self._open_key_devices()
-        if not fds:
+        probe = self._scan_devices()
+        for fd in probe.values():
+            os.close(fd)
+        if not probe:
             return                      # not in `input` group — degrade
         self.available = True
         self._thread = threading.Thread(
-            target=self._loop, args=(fds,), daemon=True,
-            name='auto-detect-input')
+            target=self._loop, daemon=True, name='auto-detect-input')
         self._thread.start()
 
     def stop(self):
@@ -158,34 +177,46 @@ class InputActivityMonitor:
 
     # ── internals ────────────────────────────────────────────────────────
 
-    def _open_key_devices(self):
-        fds = []
+    def _scan_devices(self):
+        """Open every current key-capable event node → {path: fd}."""
+        devices = {}
         try:
             names = sorted(os.listdir('/dev/input'))
         except OSError:
-            return fds
+            return devices
         for name in names:
             if not name.startswith('event'):
                 continue
+            path = os.path.join('/dev/input', name)
             try:
-                fd = os.open(os.path.join('/dev/input', name),
-                             os.O_RDONLY | os.O_NONBLOCK)
+                fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
                 buf = bytearray(4)
                 fcntl.ioctl(fd, EVIOCGBIT_EVTYPE, buf, True)
                 if buf[0] & EV_KEY_BIT:
-                    fds.append(fd)
+                    devices[path] = fd
                 else:
                     os.close(fd)
             except OSError:
                 continue
-        return fds
+        return devices
 
-    def _loop(self, fds):
-        while not self._stop_evt.is_set() and fds:
+    def _loop(self):
+        fds = {}                        # fd -> device path
+        next_rescan = 0.0               # scan immediately on entry
+        while not self._stop_evt.is_set():
+            now = time.monotonic()
+            if now >= next_rescan or not fds:
+                next_rescan = now + self.rescan_interval
+                self._merge_scan(fds)
+            if not fds:
+                self._stop_evt.wait(1.0)    # nothing to watch — retry
+                continue
             try:
-                ready, _, _ = select.select(fds, [], [], 1.0)
+                ready, _, _ = select.select(list(fds), [], [], 1.0)
             except (OSError, ValueError):
-                break
+                # an fd went bad underneath us — rebuild, don't die
+                self._close_all(fds)
+                continue
             for fd in ready:
                 try:
                     data = os.read(fd, 8192)
@@ -194,12 +225,34 @@ class InputActivityMonitor:
                         if _buffer_has_press(data):
                             self.last_press = time.monotonic()
                 except OSError:         # device vanished — drop it
-                    try:
-                        fds.remove(fd)
-                        os.close(fd)
-                    except (ValueError, OSError):
-                        pass
-        for fd in fds:
+                    self._drop(fds, fd)
+        self._close_all(fds)
+
+    def _merge_scan(self, fds):
+        """Add devices that appeared, drop paths that disappeared."""
+        fresh = self._scan_devices()
+        watched = set(fds.values())
+        for path, fd in fresh.items():
+            if path in watched:
+                os.close(fd)            # already watching this node
+            else:
+                fds[fd] = path
+        for fd, path in list(fds.items()):
+            if path not in fresh:
+                self._drop(fds, fd)
+
+    @staticmethod
+    def _drop(fds, fd):
+        fds.pop(fd, None)
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+
+    @staticmethod
+    def _close_all(fds):
+        for fd in list(fds):
+            fds.pop(fd, None)
             try:
                 os.close(fd)
             except OSError:
@@ -230,6 +283,11 @@ class _FocusTracker:
 # ── KDE / KWin backend (Wayland and X11 sessions of KDE) ──────────────────
 
 if HAVE_QTDBUS:
+    # PyQt5 builds differ on where the combined watch-mode flag lives
+    # (flat enum on some, scoped on others); OR-ing the two base flags
+    # is portable across all of them.
+    _WATCH_REG_AND_UNREG = (QDBusServiceWatcher.WatchForRegistration
+                            | QDBusServiceWatcher.WatchForUnregistration)
 
     class _AutoDetectAdaptor(QDBusAbstractAdaptor):
         """DBus surface KWin scripts call into."""
@@ -254,7 +312,16 @@ class _KWinBackend(QObject):
     Talks to KWin over the session bus: a resident watcher script
     pushes active-window events; a one-shot script answers window
     enumeration. Both scripts live in CONFIG_DIR.
+
+    Self-healing: KWin restarts (crash, update, --replace) silently
+    unload the watcher script, and a loaded script can also be stopped
+    without being unloaded. A service watcher reinstalls the script
+    the moment KWin reappears on the bus, and a slow watchdog polls
+    `isScriptLoaded` and reinstalls it if it went missing. Reinstalling
+    re-pushes the current active window, so state re-syncs itself.
     """
+
+    WATCHDOG_MS = 60000
 
     def __init__(self, controller):
         super().__init__(controller)
@@ -266,6 +333,10 @@ class _KWinBackend(QObject):
         self._enum_timer = QTimer(self)
         self._enum_timer.setSingleShot(True)
         self._enum_timer.timeout.connect(self._enum_timeout)
+        self._watchdog = QTimer(self)
+        self._watchdog.setInterval(self.WATCHDOG_MS)
+        self._watchdog.timeout.connect(self._watchdog_tick)
+        self._kwin_watcher = None
         _AutoDetectAdaptor(self)
         if not self._bus.registerService(DBUS_SERVICE):
             raise RuntimeError('DBus service name taken: ' + DBUS_SERVICE)
@@ -275,19 +346,51 @@ class _KWinBackend(QObject):
     # ── lifecycle ────────────────────────────────────────────────────────
 
     def start(self):
-        watch_js = os.path.join(CONFIG_DIR,
-                                'auto_detect_watch_v{}.js'.format(WATCH_V))
-        with open(watch_js, 'w', encoding='utf-8') as f:
-            f.write(_fill_js(WATCH_JS))
-        self._scripting('unloadScript', WATCH_SCRIPT_NAME)
-        self._scripting('loadScript', watch_js, WATCH_SCRIPT_NAME)
-        self._scripting('start')
+        self._install_watch_script()
+        self._watchdog.start()
+        # KWin restarts (crash, Plasma update, --replace) unload our
+        # watcher script with it — reinstall the moment KWin is back.
+        self._kwin_watcher = QDBusServiceWatcher(
+            'org.kde.KWin', self._bus, _WATCH_REG_AND_UNREG, self)
+        self._kwin_watcher.serviceRegistered.connect(
+            lambda _name: self._install_watch_script())
 
     def stop(self):
+        self._watchdog.stop()
+        if self._kwin_watcher is not None:
+            self._kwin_watcher.deleteLater()
+            self._kwin_watcher = None
         self._scripting('unloadScript', WATCH_SCRIPT_NAME)
         self._scripting('unloadScript', ENUM_SCRIPT_NAME)
         self._bus.unregisterObject(DBUS_PATH)
         self._bus.unregisterService(DBUS_SERVICE)
+
+    def _install_watch_script(self):
+        watch_js = os.path.join(CONFIG_DIR,
+                                'auto_detect_watch_v{}.js'.format(WATCH_V))
+        try:
+            with open(watch_js, 'w', encoding='utf-8') as f:
+                f.write(_fill_js(WATCH_JS))
+        except OSError:
+            return
+        self._scripting('unloadScript', WATCH_SCRIPT_NAME)
+        self._scripting('loadScript', watch_js, WATCH_SCRIPT_NAME)
+        self._scripting('start')    # script pushes active window on load
+
+    def _watchdog_tick(self):
+        """Reinstall the watcher script if KWin no longer has it."""
+        msg = QDBusMessage.createMethodCall(
+            'org.kde.KWin', '/Scripting', 'org.kde.kwin.Scripting',
+            'isScriptLoaded')
+        msg.setArguments([WATCH_SCRIPT_NAME])
+        try:
+            reply = self._bus.call(msg, 2000)
+        except Exception:
+            return
+        if reply.type() == QDBusMessage.ReplyMessage:
+            args = reply.arguments()
+            if args and not args[0]:
+                self._install_watch_script()
 
     # ── window enumeration (async — arrives via DBus) ────────────────────
 

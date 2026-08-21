@@ -380,3 +380,35 @@ How it works on this KDE/Wayland machine (`auto_detect.py`):
   auto-detect grace stop is dropped too, and the manual-cancel is noted to
   the auto-detect controller (same rule as a manual stop) so a still-
   focused mapped window can't instantly re-start what was discarded.
+
+## PC Bubble Widget — Auto-Detect Self-Healing
+
+*(Added 2026-08-20)*
+
+- **Auto-detect no longer dies after days of uptime** *(2026-08-20)*:
+  the evdev input monitor opened `/dev/input` exactly once at startup,
+  but keyboards and mice are re-enumerated with NEW event nodes on
+  every bluetooth reconnect, dock replug and suspend/resume cycle.
+  After a few days the widget was blind to the keyboard actually in
+  use — `idle_seconds()` grew without bound, `user_active` was
+  permanently false, and auto-start never fired (focusing VSCode no
+  longer started "Programming sessions"; anything auto-running was
+  auto-stopped instead). Diagnosed live: the 5-day-old process held
+  fds only for `event1–20`, while the keyboard in use was `event27`.
+  The monitor thread now rescans `/dev/input` every 30 s (and every
+  second while it holds no devices at all), adopts new nodes, drops
+  vanished ones, and rebuilds its fd set instead of exiting when a
+  device disappears underneath it.
+- **KWin watcher script is now self-healing** *(2026-08-20)*: a KWin
+  restart (crash, Plasma update, `--replace`) silently unloads the
+  auto-detect watcher script, and a loaded script can also be stopped
+  without being unloaded — either way active-window events stopped
+  forever while `isScriptLoaded` still said `true`. A
+  `QDBusServiceWatcher` now reinstalls the script the moment
+  `org.kde.KWin` reappears on the session bus, and a 60 s watchdog
+  polls `isScriptLoaded` and reinstalls the script if it went
+  missing. Reinstalling re-pushes the current active window, so the
+  backend state re-syncs itself.
+- Smoke tests: section **[9]** drives the real monitor thread with a
+  pipe-backed fake evdev device and proves activity tracking survives
+  a device being replaced under it (the exact long-uptime failure).

@@ -743,6 +743,61 @@ def main() -> int:
               _struct.pack('<QQHHi', 0, 0, 0x01, 30, 0)
               + _struct.pack('<QQHHi', 0, 0, 0x01, 30, 2)))
 
+    # ── input monitor survives device churn (the long-uptime bug) ──────
+    # A monitor that opens /dev/input once at startup goes blind when a
+    # keyboard is re-enumerated (BT reconnect, dock replug, resume) —
+    # idle_seconds() then grows forever and auto-start never fires.
+    print('[9] auto-detect input monitor survives device changes')
+    import os as _os
+    from auto_detect import InputActivityMonitor
+
+    mon = InputActivityMonitor()
+    mon.rescan_interval = 0.3          # rescan fast for the test
+    fake_devs = {}                     # path -> read end (a pipe)
+
+    def fake_scan():
+        live = {}
+        for path, fd in list(fake_devs.items()):
+            try:
+                _os.fstat(fd)          # still open?
+                live[path] = _os.dup(fd)   # fresh fd, like a real open
+            except OSError:
+                pass
+        return live
+    mon._scan_devices = fake_scan
+
+    r1, w1 = _os.pipe()
+    _os.set_blocking(r1, False)
+    fake_devs['/dev/input/fake0'] = r1
+    mon.start()
+    check('input monitor started with a device',
+          mon.available and mon._thread is not None
+          and mon._thread.is_alive())
+    time.sleep(1.3)                    # no input → must go idle
+    check('no input → idle time grows', mon.idle_seconds() > 1.0)
+    _os.write(w1, b'hello')
+    time.sleep(0.4)
+    check('activity registered from the first device',
+          mon.idle_seconds() < 1.0)
+
+    # the device is replaced by a NEW node (BT reconnect / replug):
+    r2, w2 = _os.pipe()                # open the replacement first so
+    _os.set_blocking(r2, False)        # fd numbers can't be reused
+    fake_devs.clear()
+    fake_devs['/dev/input/fake1'] = r2
+    _os.close(r1)
+    _os.close(w1)
+    time.sleep(1.3)                    # loop drops old, rescans, adopts new
+    _os.write(w2, b'world')
+    time.sleep(0.4)
+    check('replacement device is adopted and watched',
+          mon.idle_seconds() < 1.0)
+    mon.stop()
+    mon._thread.join(2.0)
+    check('monitor thread exits on stop', not mon._thread.is_alive())
+    _os.close(r2)
+    _os.close(w2)
+
     bubble.close()
     app.quit()
     print()
