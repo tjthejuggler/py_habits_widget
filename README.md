@@ -412,3 +412,42 @@ How it works on this KDE/Wayland machine (`auto_detect.py`):
 - Smoke tests: section **[9]** drives the real monitor thread with a
   pipe-backed fake evdev device and proves activity tracking survives
   a device being replaced under it (the exact long-uptime failure).
+
+*(Added 2026-08-21)*
+
+- **Visible idle countdown replaces the invisible 3-minute grace**
+  *(2026-08-21)*: when a mapped window loses focus or input stops for
+  `idle_seconds` (now default 5 s, configurable), the habit square
+  shows a black box with a red border counting down from
+  `countdown_seconds` (default 30 s, configurable). Activity again
+  before zero → the same session continues untouched. At zero the
+  session is finalized retroactively with `idle + countdown` seconds
+  (35 s by default) subtracted from its end — the idle gap and the
+  countdown itself never happened. Both durations live in
+  `~/.config/pc_bubble_widget/auto_detect.json` and are editable in
+  the new settings screen.
+- **✕ cancel button on running squares** *(2026-08-21)*: top-right
+  small square with a red ✕ — same as the right-click "Cancel timer
+  (discard)". The sync dot moves left of it while a timer runs.
+- **Running squares are 30% larger** *(2026-08-21)*: 46 → 60 px while
+  their timer runs (room for the ✕ and the countdown box); the ring
+  spread radius, window size and proximity zone account for the
+  larger squares.
+- **Center-circle left-click stops every running timer** *(2026-08-21)*:
+  with ≥1 timer active, clicking the middle bubble stops and queues
+  them all exactly as if each square had been clicked (mapped habits
+  get the manual-stop auto-restart suppression); with none running it
+  still starts a widget drag.
+- **Settings screen** *(2026-08-21)*: the bubble's right-click menu
+  gains "Settings…" — a habit picker listing the phone's FULL habit
+  catalog (`all_habits`, pushed alongside the widget config) where
+  checking a habit queues a `toggle_pc_widget_habit` event on the
+  bridge; the phone's event poller applies it to its "PC widget"
+  toggles (idempotent — the event carries the ABSOLUTE desired
+  state) and pushes the updated config back, so the square appears or
+  disappears on the widget's next config poll. The dialog also edits
+  the idle threshold and countdown duration, and live-refreshes from
+  the phone while open.
+- Smoke tests: section **[2b]** rewritten for the countdown (arm /
+  cancel / expiry with the 35 s deduction / manual stop mid-countdown
+  / state.json persistence incl. deadline + deduct).

@@ -205,6 +205,39 @@ def append_event(
     return event_id if isinstance(event_id, str) and event_id else None
 
 
+def load_config_full() -> Optional[dict]:
+    """
+    The whole phone-pushed config body: {"version", "updated_at",
+    "habits": [...], "all_habits": [name, ...]}. "all_habits" is the
+    phone's FULL habit catalog — the settings screen's habit-picker
+    source; it is absent until the phone app pushes the newer format
+    (the picker then falls back to the currently-enabled habits).
+    Returns None when the bridge is unreachable.
+    """
+    return _request('GET', 'pc_widget/config')
+
+
+def append_toggle_event(habit: str, enabled: bool) -> Optional[str]:
+    """
+    Queues a PC→phone habit-toggle request on the bridge (the settings
+    screen's habit picker): the phone's event poller applies it to its
+    "PC widget" toggles — exactly as if the switch had been flipped in
+    the Android app — and pushes the updated widget config back, which
+    the bubble picks up on its config poll. Carries the ABSOLUTE
+    desired state, so at-least-once redelivery stays idempotent.
+    """
+    payload = {
+        'habit': habit,
+        'kind': 'toggle_pc_widget_habit',
+        'enabled': bool(enabled),
+    }
+    root = _request('POST', 'pc_widget/event', payload)
+    if root is None:
+        return None
+    event_id = root.get('id')
+    return event_id if isinstance(event_id, str) and event_id else None
+
+
 def pending_events() -> Optional[List[dict]]:
     """
     Events queued on the bridge that the phone has not acked yet.

@@ -8,7 +8,7 @@ itself whenever you type or click in that app, and stops when you
 
   * cancel it manually (click the square — auto-start then stays off
     until you leave that window once, so it can't fight you), or
-  * stop using the machine for `idle_seconds` (default 15 s), or
+  * stop using the machine for `idle_seconds` (default 5 s), or
   * switch away / minimize the window (it is no longer the active
     window, so you're clearly not doing that habit right now).
 
@@ -58,7 +58,8 @@ except ImportError:          # pragma: no cover - unusual PyQt5 builds
 
 CONFIG_DIR = os.path.expanduser('~/.config/pc_bubble_widget')
 CONFIG_FILE = os.path.join(CONFIG_DIR, 'auto_detect.json')
-IDLE_SECONDS_DEFAULT = 15
+IDLE_SECONDS_DEFAULT = 5
+COUNTDOWN_SECONDS_DEFAULT = 30
 
 DBUS_SERVICE = 'org.pyhabits.AutoDetect'
 DBUS_PATH = '/AutoDetect'
@@ -534,6 +535,7 @@ class AutoDetectController(QObject):
         self._habits = habits_provider or (lambda: set())
         self._mappings = {}          # habit -> window class
         self._idle_seconds = IDLE_SECONDS_DEFAULT
+        self._countdown_seconds = COUNTDOWN_SECONDS_DEFAULT
         self._auto_started = set()   # habits whose timer WE started
         self._suppress = set()       # manual stop → no restart until unfocus
         self._backend = None
@@ -579,6 +581,24 @@ class AutoDetectController(QObject):
     def mapping_for(self, habit):
         return self._mappings.get(habit)
 
+    def idle_seconds(self):
+        """Idle threshold before a mapped habit's countdown starts."""
+        return self._idle_seconds
+
+    def countdown_seconds(self):
+        """Visible countdown length before an auto-stop finalizes."""
+        return self._countdown_seconds
+
+    def set_idle_seconds(self, seconds):
+        if isinstance(seconds, (int, float)) and seconds > 0:
+            self._idle_seconds = int(seconds)
+            self._save_config()
+
+    def set_countdown_seconds(self, seconds):
+        if isinstance(seconds, (int, float)) and seconds > 0:
+            self._countdown_seconds = int(seconds)
+            self._save_config()
+
     def set_mapping(self, habit, window_class):
         self._mappings[habit] = window_class
         self._suppress.discard(habit)
@@ -599,6 +619,9 @@ class AutoDetectController(QObject):
             idle = data.get('idle_seconds')
             if isinstance(idle, (int, float)) and idle > 0:
                 self._idle_seconds = int(idle)
+            countdown = data.get('countdown_seconds')
+            if isinstance(countdown, (int, float)) and countdown > 0:
+                self._countdown_seconds = int(countdown)
         except (OSError, ValueError):
             pass
 
@@ -607,6 +630,7 @@ class AutoDetectController(QObject):
             os.makedirs(CONFIG_DIR, exist_ok=True)
             with open(CONFIG_FILE + '.tmp', 'w') as f:
                 json.dump({'idle_seconds': self._idle_seconds,
+                           'countdown_seconds': self._countdown_seconds,
                            'mappings': self._mappings}, f, indent=1)
             os.replace(CONFIG_FILE + '.tmp', CONFIG_FILE)
         except OSError:

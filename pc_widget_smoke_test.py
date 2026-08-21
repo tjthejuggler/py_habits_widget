@@ -243,54 +243,59 @@ def main() -> int:
           bubble.squares[0].tooltip_lines() ==
           ['Meditation', 'today: 150 min (5 sessions)'])
 
-    # ── auto-stop grace period (debounced auto-detect stops) ───────────
-    print('[2b] auto-stop grace period')
+    # ── auto-stop countdown (visible debounce) ──────────────────────────
+    print('[2b] auto-stop countdown')
     bubble.on_square_clicked(bubble.squares[0])       # start Meditation
     sess_start = datetime.now() - timedelta(minutes=10)
     bubble.timers['Meditation'] = sess_start
-    bubble.request_auto_stop('Meditation')
-    stopped_at = datetime.now() - timedelta(seconds=20)
-    bubble.pending_auto_stops['Meditation'] = stopped_at
-    grace = bubble._grace_timers.get('Meditation')
-    check('grace keeps the timer running (not stopped yet)',
+    bubble.request_auto_stop('Meditation', countdown_s=30, deduct_s=35)
+    countdown = bubble._grace_timers.get('Meditation')
+    check('countdown keeps the timer running (not stopped yet)',
           'Meditation' in bubble.timers)
-    check('grace timer armed single-shot for the full grace period',
-          grace is not None and grace.isActive() and grace.isSingleShot()
-          and grace.interval() == widget_mod.AUTO_STOP_GRACE_MS)
-    check('timer in grace counts as not-running for auto-detect',
+    check('countdown timer armed single-shot for the full duration',
+          countdown is not None and countdown.isActive() and countdown.isSingleShot()
+          and countdown.interval() == 30_000)
+    check('square shows the countdown box (top-left digits)',
+          bubble.squares[0].countdown_left is not None
+          and bubble.squares[0].countdown_left <= 30)
+    check('timer in countdown counts as not-running for auto-detect',
           'Meditation' in bubble.timers
           and 'Meditation' in bubble.pending_auto_stops)
 
-    # returning within the grace period continues the SAME session
+    # returning before zero continues the SAME session
     bubble.cancel_pending_stop('Meditation')
-    check('return within the grace period continues the session',
+    check('return before zero continues the session',
           'Meditation' in bubble.timers
           and 'Meditation' not in bubble.pending_auto_stops
           and 'Meditation' not in bubble._grace_timers)
+    check('countdown box cleared on cancel',
+          bubble.squares[0].countdown_left is None)
 
-    # grace expiry → one event, finish time retroactive at activity stop
-    bubble.request_auto_stop('Meditation')
-    stopped_at = datetime.now() - timedelta(seconds=20)
-    bubble.pending_auto_stops['Meditation'] = stopped_at
+    # countdown expiry → one event, idle+countdown deducted from the end
+    bubble.request_auto_stop('Meditation', countdown_s=30, deduct_s=35)
     n_events = len(STATE['events'])
     bubble._finalize_auto_stop('Meditation')
     new_evs = STATE['events'][n_events:]
-    check('grace expiry queues exactly one event',
+    check('countdown expiry queues exactly one event',
           len(new_evs) == 1 and new_evs[0]['habit'] == 'Meditation')
-    check('finish time is retroactive (activity stop, not expiry)',
-          new_evs and new_evs[0]['end'] == stopped_at.strftime('%H:%M:%S'))
-    check('minutes measured up to the activity stop',
+    end_secs = sum(int(x) * m for x, m in zip(
+        new_evs[0]['end'].split(':'), (3600, 60, 1))) if new_evs else -1
+    exp = datetime.now() - timedelta(seconds=35)
+    exp_secs = exp.hour * 3600 + exp.minute * 60 + exp.second
+    check('finish time has idle+countdown (35 s) deducted',
+          abs(end_secs - exp_secs) <= 1)
+    check('minutes measured up to the deducted end',
           new_evs and new_evs[0]['minutes'] == 9
           and new_evs[0]['kind'] == 'session')
     check('timer gone after finalize',
           'Meditation' not in bubble.timers
           and 'Meditation' not in bubble.pending_auto_stops)
 
-    # manual stop mid-grace finalizes immediately (no grace wait)
+    # manual stop mid-countdown finalizes immediately (no countdown wait)
     bubble.on_square_clicked(bubble.squares[0])       # start again
     bubble.request_auto_stop('Meditation')
     bubble.on_square_clicked(bubble.squares[0])       # manual stop
-    check('manual stop during grace bypasses the debounce',
+    check('manual stop during the countdown bypasses the debounce',
           'Meditation' not in bubble.timers
           and 'Meditation' not in bubble.pending_auto_stops
           and 'Meditation' not in bubble._grace_timers)
@@ -303,6 +308,10 @@ def main() -> int:
         saved = json.load(f)
     check('pending stop persisted to state.json',
           'Meditation' in (saved.get('pending_stops') or {}))
+    check('pending stop carries deadline + deduct',
+          isinstance((saved.get('pending_stops') or {}).get('Meditation'), dict)
+          and 'deadline' in saved['pending_stops']['Meditation']
+          and saved['pending_stops']['Meditation']['deduct'] == 35)
     bubble._finalize_auto_stop('Meditation')          # leave state clean
 
     # drain the queue like the phone so section [3] starts from the
@@ -315,14 +324,14 @@ def main() -> int:
 
     # ── ring layout + backdate (right-click menu) ──────────────────────
     print('[3] ring layout + backdate')
-    from pc_bubble_widget import REST_R, TUCK_R, SQUARE_D
+    from pc_bubble_widget import REST_R, TUCK_R, SQUARE_D, SQUARE_D_RUN
 
     bubble._near = False
     bubble._apply_layout_now()
     check('idle squares tuck in when mouse away',
           all(abs(s._radius - TUCK_R) < 0.5 for s in bubble.squares))
-    check('window sized to spread ring',
-          bubble.width() == 2 * (bubble._spread_r + SQUARE_D // 2) + 8)
+    check('window sized to spread ring (running squares are the big ones)',
+          bubble.width() == 2 * (bubble._spread_r + SQUARE_D_RUN // 2) + 8)
 
     bubble.on_square_clicked(bubble.squares[0])       # start Meditation
     bubble._apply_layout_now()
@@ -640,7 +649,8 @@ def main() -> int:
           TUCK_R + SQUARE_D // 2 - BUBBLE_D // 2 > SQUARE_D // 3)
     body = bubble.squares[0]._render_body()
     check('square body renders offscreen for the warp',
-          body.width() == SQUARE_D and body.height() == SQUARE_D)
+          body.width() == bubble.squares[0].width()
+          and body.height() == bubble.squares[0].height())
 
     bubble._near = True
     bubble._apply_layout_now()

@@ -34,7 +34,7 @@ import html
 import time
 from datetime import datetime, timedelta
 
-from PyQt5.QtCore import Qt, QTimer, QPoint, QRectF, QDateTime
+from PyQt5.QtCore import Qt, QTimer, QPoint, QRect, QRectF, QDateTime
 from PyQt5.QtNetwork import QLocalSocket, QLocalServer
 from PyQt5.QtGui import (QIcon, QPixmap, QPainter, QColor, QFont, QPen,
                          QFontMetrics, QCursor)
@@ -48,6 +48,7 @@ from pc_widget_sync import (
 )
 from pc_widget_stats import HabitStats, habit_style
 from auto_detect import AutoDetectController, open_window_picker
+from pc_settings_dialog import PcSettingsDialog
 
 try:
     from habit_colors import get_habit_icon_path
@@ -93,6 +94,8 @@ def hide_tip_text():
 
 BUBBLE_D = 56          # bubble diameter (px)
 SQUARE_D = 46          # habit square size (px)
+RUN_GROW = 1.30        # running squares grow 30% — room for ✕ + countdown
+SQUARE_D_RUN = int(round(SQUARE_D * RUN_GROW))   # 46 → 60 while running
 REST_GAP = 4           # bubble↔square gap at rest — just a sliver
 REST_R = BUBBLE_D // 2 + REST_GAP + SQUARE_D // 2   # running timers sit here
 TUCK_R = BUBBLE_D // 2 + SQUARE_D // 2 - 26         # idle: mostly BEHIND the bubble
@@ -108,6 +111,8 @@ BORDER_SQ_RUN = QColor(82, 196, 26)
 DOT_PENDING = QColor(255, 170, 0)     # orange dot: queued, not yet acked
 DOT_ACKED = QColor(82, 196, 26)       # green dot: phone confirmed
 TEXT_COLOR = QColor(235, 235, 235)
+CANCEL_RED = QColor(232, 72, 72)       # ✕ strokes + countdown border
+OVERLAY_BG = QColor(12, 12, 14, 235)   # countdown box / ✕ button fill
 
 # Ack-poll cadence: 1 s while events are queued (the phone long-polls the
 # bridge, so its ack usually lands ~1 s after the timer stops), 30 s when
@@ -118,19 +123,25 @@ TEXT_COLOR = QColor(235, 235, 235)
 ACK_POLL_FAST_MS = 1_000
 ACK_POLL_IDLE_MS = 30_000
 
-# Auto-detected stops are debounced: when a mapped window loses focus
-# (or the user goes idle) the timer keeps running for a three-minute
-# grace period. Activity in that window again within it → the SAME
-# session simply continues. No activity → the session is finalized
-# retroactively at the moment window activity actually stopped, so
-# brief window switches don't spam the phone with tiny sessions/taps.
-AUTO_STOP_GRACE_MS = 180_000
+# Auto-detected stops run a VISIBLE countdown on the square: when a
+# mapped window loses focus (or the user goes idle for idle_seconds —
+# see auto_detect.json), a red-bordered countdown box appears on the
+# habit square. Activity in that window again before it reaches zero
+# → the SAME session simply continues. Reaching zero → the session is
+# finalized retroactively with `idle + countdown` seconds (35 s with
+# the 5 s / 30 s defaults) subtracted from its end — the idle gap and
+# the countdown itself never happened.
 
 
 def fmt_elapsed(seconds: int) -> str:
     h, rem = divmod(int(seconds), 3600)
     m, s = divmod(rem, 60)
     return '{}:{:02d}:{:02d}'.format(h, m, s) if h else '{:02d}:{:02d}'.format(m, s)
+
+
+def square_d(running: bool) -> int:
+    """Habit square side — 30% larger while its timer runs."""
+    return SQUARE_D_RUN if running else SQUARE_D
 
 
 def _tint_pixmap_white(pm: QPixmap) -> QPixmap:
@@ -159,15 +170,23 @@ class HabitSquare(QWidget):
         self.icon_name = habit.get('icon')
         self.minutes_primary = habit.get('minutes_primary', False)
         self.running = False
+        self.countdown_left = None   # seconds shown in the idle-countdown box
         self.pending = 0          # queued-but-unacked events for this habit
         self.acked_flash_until = 0.0
         self._angle = 0.0         # ring position in radians (set by the bubble)
         self._radius = float(TUCK_R)  # current ring radius (animated)
         self._press_pos = None    # global press pos while click-vs-drag is pending
+        self._x_rect = None       # hit rect of the ✕ button (set while rendering)
         self.setFixedSize(SQUARE_D, SQUARE_D)
         self.setMouseTracking(True)   # hover self-heal needs no-button moves
         self.setCursor(Qt.PointingHandCursor)
         self._icon_pm = self._load_icon()
+
+    def _apply_size(self):
+        """Running squares are 30% larger — room for the ✕ and countdown."""
+        d = square_d(self.running)
+        if self.width() != d or self.height() != d:
+            self.setFixedSize(d, d)
 
     def _load_icon(self):
         overrides = {self.habit_name: self.icon_name} if self.icon_name else None
@@ -214,6 +233,14 @@ class HabitSquare(QWidget):
 
     def mousePressEvent(self, e):
         if e.button() == Qt.LeftButton:
+            if (self.running and self._x_rect is not None
+                    and self._x_rect.contains(e.pos())):
+                # the ✕ button: discard the timer outright — same as the
+                # right-click menu's "Cancel timer (discard)"
+                win = self.window()
+                win._hide_tooltip()  # type: ignore[attr-defined]
+                win.cancel_timer(self.habit_name)  # type: ignore[attr-defined]
+                return
             # click-vs-drag: don't toggle yet — a drag may take over
             self._press_pos = e.globalPos()
         elif e.button() == Qt.RightButton:
@@ -284,10 +311,12 @@ class HabitSquare(QWidget):
     def _render_body(self) -> QPixmap:
         """
         The square's normal look rendered offscreen — rounded rect in the
-        habit's phone-matched tier colour, icon, dots, timer — so the
+        habit's phone-matched tier colour, icon, dots, timer, and while
+        running the ✕ cancel button + idle-countdown box — so the
         black-hole warp can distort all of it.
         """
-        pm = QPixmap(SQUARE_D, SQUARE_D)
+        d = self.width()            # running squares are 30% larger
+        pm = QPixmap(d, d)
         pm.fill(Qt.transparent)
         p = QPainter(pm)
         p.setRenderHint(QPainter.Antialiasing)
@@ -299,25 +328,25 @@ class HabitSquare(QWidget):
         r = 12.0
         p.setPen(Qt.NoPen)
         p.setBrush(bg)
-        p.drawRoundedRect(1, 1, SQUARE_D - 2, SQUARE_D - 2, r, r)
+        p.drawRoundedRect(1, 1, d - 2, d - 2, r, r)
         p.setBrush(Qt.NoBrush)
         if self.running:
             p.setPen(QPen(BORDER_SQ_RUN, 2))
-            p.drawRoundedRect(1, 1, SQUARE_D - 2, SQUARE_D - 2, r, r)
+            p.drawRoundedRect(1, 1, d - 2, d - 2, r, r)
         elif inner_hex:
             # phone phase 4: double vivid border with a thin black gap
             p.setPen(QPen(QColor(outer_hex), 1))
-            p.drawRoundedRect(QRectF(0.5, 0.5, SQUARE_D - 1, SQUARE_D - 1), r, r)
+            p.drawRoundedRect(QRectF(0.5, 0.5, d - 1, d - 1), r, r)
             p.setPen(QPen(Qt.black, 1))
-            p.drawRoundedRect(QRectF(2.5, 2.5, SQUARE_D - 5, SQUARE_D - 5), r - 2, r - 2)
+            p.drawRoundedRect(QRectF(2.5, 2.5, d - 5, d - 5), r - 2, r - 2)
             p.setPen(QPen(QColor(inner_hex), 1))
-            p.drawRoundedRect(QRectF(4.5, 4.5, SQUARE_D - 9, SQUARE_D - 9), r - 4, r - 4)
+            p.drawRoundedRect(QRectF(4.5, 4.5, d - 9, d - 9), r - 4, r - 4)
         else:
             p.setPen(QPen(QColor(border_hex) if border_hex else BORDER_IDLE,
                           2 if border_hex else 1))
-            p.drawRoundedRect(1, 1, SQUARE_D - 2, SQUARE_D - 2, r, r)
+            p.drawRoundedRect(1, 1, d - 2, d - 2, r, r)
 
-        cx = SQUARE_D // 2
+        cx = d // 2
         if not self._icon_pm.isNull():
             p.drawPixmap(cx - self._icon_pm.width() // 2,
                          cx - self._icon_pm.height() // 2 - 4, self._icon_pm)
@@ -332,17 +361,46 @@ class HabitSquare(QWidget):
             secs = self.window().elapsed_for(self.habit_name)  # type: ignore[attr-defined]
             p.setPen(fg)
             p.setFont(QFont('Sans', 7, QFont.Bold))
-            p.drawText(pm.rect().adjusted(0, SQUARE_D - 16, 0, -2),
+            p.drawText(pm.rect().adjusted(0, d - 16, 0, -2),
                        Qt.AlignCenter, fmt_elapsed(secs))
 
+        # idle countdown: black box, red border, two digits, top-left
+        if self.countdown_left is not None:
+            bw, bh = 20, 16
+            p.setPen(QPen(CANCEL_RED, 1))
+            p.setBrush(OVERLAY_BG)
+            p.drawRect(1, 1, bw, bh)
+            p.setPen(TEXT_COLOR)
+            p.setFont(QFont('Sans', 8, QFont.Bold))
+            p.drawText(QRect(1, 1, bw + 1, bh + 1), Qt.AlignCenter,
+                       '{:02d}'.format(max(0, int(self.countdown_left)) % 100))
+
+        # ✕ cancel button (top-right, running only) — discards the timer
+        self._x_rect = None
+        if self.running:
+            xs = 14
+            xr = QRect(d - xs - 2, 2, xs, xs)
+            self._x_rect = xr
+            p.setPen(QPen(CANCEL_RED, 1))
+            p.setBrush(OVERLAY_BG)
+            p.drawRect(xr)
+            p.setPen(QPen(CANCEL_RED, 2))
+            m = 4
+            p.drawLine(xr.left() + m, xr.top() + m,
+                       xr.right() - m, xr.bottom() - m)
+            p.drawLine(xr.left() + m, xr.bottom() - m,
+                       xr.right() - m, xr.top() + m)
+
+        # sync dot: top-right normally, nudged left of the ✕ while running
+        dot_x = d - 26 if self.running else d - 12
         if self.pending > 0:
             p.setPen(Qt.NoPen)
             p.setBrush(DOT_PENDING)
-            p.drawEllipse(SQUARE_D - 12, 4, 8, 8)
+            p.drawEllipse(dot_x, 5, 8, 8)
         elif time.time() < self.acked_flash_until:
             p.setPen(Qt.NoPen)
             p.setBrush(DOT_ACKED)
-            p.drawEllipse(SQUARE_D - 12, 4, 8, 8)
+            p.drawEllipse(dot_x, 5, 8, 8)
         p.end()
         return pm
 
@@ -362,24 +420,25 @@ class HabitSquare(QWidget):
         # never rotates; only the squeeze direction follows the ring.
         ux, uy = math.cos(self._angle), -math.sin(self._angle)
         vertical = abs(ux) >= abs(uy)   # radial mostly horizontal → columns
+        d = self.width()
         n = 16
-        w = SQUARE_D / n
+        w = d / n
         for i in range(n):
             c = (i + 0.5) * w           # strip centre along the axis
             outward = ux if vertical else uy
-            f = (c / SQUARE_D) if outward > 0 else 1 - (c / SQUARE_D)
+            f = (c / d) if outward > 0 else 1 - (c / d)
             s = 1.0 - PINCH * t * (1.0 - f)
             p.setOpacity(1.0 - PINCH_FADE * t * (1.0 - f))
             if vertical:
                 p.drawPixmap(
-                    QRectF(c - w / 2, SQUARE_D * (1 - s) / 2,
-                           w, SQUARE_D * s),
-                    pm, QRectF(c - w / 2, 0, w, SQUARE_D))
+                    QRectF(c - w / 2, d * (1 - s) / 2,
+                           w, d * s),
+                    pm, QRectF(c - w / 2, 0, w, d))
             else:
                 p.drawPixmap(
-                    QRectF(SQUARE_D * (1 - s) / 2, c - w / 2,
-                           SQUARE_D * s, w),
-                    pm, QRectF(0, c - w / 2, SQUARE_D, w))
+                    QRectF(d * (1 - s) / 2, c - w / 2,
+                           d * s, w),
+                    pm, QRectF(0, c - w / 2, d, w))
         p.setOpacity(1.0)
         p.end()
 
@@ -398,14 +457,17 @@ class BubbleWidget(QWidget):
         self.squares = []                 # type: list
         self.timers = {}                  # habit name -> datetime (start)
         self.pending_by_habit = {}        # habit name -> queued count
-        self.pending_auto_stops = {}      # habit -> datetime activity stopped
-        self._grace_timers = {}           # habit -> single-shot grace QTimer
+        # habit -> {stopped_at, deadline, deduct}: the visible idle
+        # countdown state (deadline drives the box, deduct the retroactive
+        # end-time correction when it fires)
+        self.pending_auto_stops = {}
+        self._grace_timers = {}           # habit -> single-shot countdown QTimer
         self.auto_note_toggle = None      # set by PcBubbleApp (auto-detect)
         self._drag_offset = None          # type: QPoint | None
         self._config_sig = None          # (name, icon, minutes_primary) tuple
         self._spread_r = REST_R           # spread ring radius (per habit count)
         self._near = False                # mouse inside the approach zone?
-        self.window_d = 2 * (REST_R + SQUARE_D // 2) + 8
+        self.window_d = 2 * (REST_R + SQUARE_D_RUN // 2) + 8
         self.setFixedSize(self.window_d, self.window_d)
         # the center circle as a child widget: painted ABOVE the squares
         # so tucked ones collapse behind it (black-hole). Transparent for
@@ -494,10 +556,11 @@ class BubbleWidget(QWidget):
         self.squares = []
         n = len(habits)
         # spread radius: enough ring circumference for every square to get
-        # its own non-overlapping clickable slot; the window grows to match
+        # its own non-overlapping clickable slot (sized for RUNNING
+        # squares — they are the big ones); the window grows to match
         self._spread_r = (max(REST_R, int(math.ceil(
-            n * (SQUARE_D + SPREAD_PAD) / (2 * math.pi)))) if n else REST_R)
-        new_d = 2 * (self._spread_r + SQUARE_D // 2) + 8
+            n * (SQUARE_D_RUN + SPREAD_PAD) / (2 * math.pi)))) if n else REST_R)
+        new_d = 2 * (self._spread_r + SQUARE_D_RUN // 2) + 8
         if new_d != self.window_d:
             self.window_d = new_d
             self.setFixedSize(new_d, new_d)
@@ -505,6 +568,7 @@ class BubbleWidget(QWidget):
             sq = HabitSquare(habit, self)
             sq._angle = math.radians(90 - i * 360.0 / n) if n else 0.0
             sq.running = habit['name'] in self.timers  # restore persisted timers
+            sq._apply_size()           # running squares start out 30% larger
             sq._radius = self._target_radius(sq)
             self._place_square(sq)
             sq.show()
@@ -556,8 +620,9 @@ class BubbleWidget(QWidget):
         c = self._center()
         x = c.x() + sq._radius * math.cos(sq._angle)
         y = c.y() - sq._radius * math.sin(sq._angle)
-        sq.move(int(round(x)) - SQUARE_D // 2,
-                int(round(y)) - SQUARE_D // 2)
+        half = sq.width() // 2            # running squares are larger
+        sq.move(int(round(x)) - half,
+                int(round(y)) - half)
 
     def _apply_layout_now(self):
         """Snaps every square onto its target radius (no animation)."""
@@ -656,7 +721,7 @@ class BubbleWidget(QWidget):
         c = self.mapToGlobal(self._center())
         pos = QCursor.pos()
         d = math.hypot(pos.x() - c.x(), pos.y() - c.y())
-        enter_r = self._spread_r + SQUARE_D
+        enter_r = self._spread_r + SQUARE_D_RUN
         exit_r = enter_r + 14  # hysteresis: no flicker at the boundary
         self._set_near(d <= (exit_r if self._near else enter_r))
 
@@ -680,6 +745,8 @@ class BubbleWidget(QWidget):
         for sq in self.squares:
             if sq.habit_name == habit_name:
                 sq.running = True
+                sq._apply_size()          # 30% larger while running
+                self._place_square(sq)
         self._raise_running()
         self._kick_anim()
         for sq in self.squares:
@@ -708,6 +775,8 @@ class BubbleWidget(QWidget):
         for sq in self.squares:
             if sq.habit_name == habit_name:
                 sq.running = False
+                sq._apply_size()          # back to the idle size
+                self._place_square(sq)
         self._kick_anim()
         finish = end or datetime.now()
         elapsed = (finish - begun).total_seconds()
@@ -747,6 +816,8 @@ class BubbleWidget(QWidget):
         for sq in self.squares:
             if sq.habit_name == habit_name:
                 sq.running = False
+                sq._apply_size()          # back to the idle size
+                self._place_square(sq)
         self._kick_anim()
         for sq in self.squares:
             if sq.habit_name == habit_name:
@@ -759,33 +830,55 @@ class BubbleWidget(QWidget):
             # the still-focused window — same rule as a manual stop
             self.auto_note_toggle(habit_name, False)
 
-    # ── auto-stop grace period (debounce) ───────────────────────────────
-
-    def request_auto_stop(self, habit_name: str):
+    def stop_all_timers(self):
         """
-        Auto-detect says activity stopped. Don't stop outright — arm
-        the grace countdown: activity in the mapped window again
-        within it continues this same session; only after it lapses
-        is the session finalized, retroactively at the moment
-        activity stopped.
+        Center-circle left-click with timers running: stop (and queue to
+        the phone) every active timer — exactly as if each square had
+        been clicked in turn.
+        """
+        self._hide_tooltip()
+        for name in list(self.timers):
+            self.stop_timer(name)
+            if self.auto_note_toggle is not None:
+                # a mapped habit must not be instantly auto-restarted by
+                # the still-focused window — same rule as manual stops
+                self.auto_note_toggle(name, False)
+
+    # ── auto-stop countdown (visible debounce) ──────────────────────────
+
+    def request_auto_stop(self, habit_name: str, countdown_s: int = 30,
+                          deduct_s: int = 35):
+        """
+        Auto-detect says activity stopped (window lost focus or the user
+        went idle). Don't stop outright — run the VISIBLE countdown on
+        the square: activity in the mapped window again before it
+        reaches zero continues this same session; at zero the session
+        is finalized retroactively with `deduct_s` seconds (the idle
+        gap + the countdown itself) subtracted from its end.
         """
         if habit_name not in self.timers:
             return
-        self.pending_auto_stops[habit_name] = datetime.now()
-        self._arm_grace(habit_name, AUTO_STOP_GRACE_MS)
+        now = datetime.now()
+        self.pending_auto_stops[habit_name] = {
+            'stopped_at': now,
+            'deadline': now + timedelta(seconds=max(1, int(countdown_s))),
+            'deduct': max(0, int(deduct_s)),
+        }
+        self._arm_grace(habit_name, countdown_s)
+        self._update_countdown_displays()
         self._save_state()
 
     def cancel_pending_stop(self, habit_name: str):
-        """Back inside the grace period → the same session keeps running."""
+        """Activity resumed → the countdown dies, the session keeps running."""
         self._cancel_pending_stop(habit_name)
         self._save_state()
 
     def finalize_pending_stops(self):
-        """Flush every grace-period stop now (retroactively) — shutdown."""
+        """Flush every pending countdown stop now (retroactively) — shutdown."""
         for habit_name in list(self.pending_auto_stops):
             self._finalize_auto_stop(habit_name)
 
-    def _arm_grace(self, habit_name: str, ms: int):
+    def _arm_grace(self, habit_name: str, seconds: float):
         timer = self._grace_timers.get(habit_name)
         if timer is None:
             timer = QTimer(self)
@@ -793,18 +886,40 @@ class BubbleWidget(QWidget):
             timer.timeout.connect(
                 lambda h=habit_name: self._finalize_auto_stop(h))
             self._grace_timers[habit_name] = timer
-        timer.start(max(0, ms))
+        timer.start(max(0, int(seconds * 1000)))
 
     def _finalize_auto_stop(self, habit_name: str):
-        stopped_at = self.pending_auto_stops.pop(habit_name, None)
+        info = self.pending_auto_stops.pop(habit_name, None)
         self._drop_grace_timer(habit_name)
-        if stopped_at is None or habit_name not in self.timers:
+        self._set_countdown_display(habit_name, None)
+        if info is None or habit_name not in self.timers:
             return
-        self.stop_timer(habit_name, end=stopped_at)  # flashes the minutes
+        # the idle gap + the countdown itself never happened: finalize
+        # retroactively with that time subtracted from the session's end
+        self.stop_timer(
+            habit_name,
+            end=datetime.now() - timedelta(seconds=info['deduct']))
 
     def _cancel_pending_stop(self, habit_name: str):
         self.pending_auto_stops.pop(habit_name, None)
         self._drop_grace_timer(habit_name)
+        self._set_countdown_display(habit_name, None)
+
+    def _set_countdown_display(self, habit_name: str, seconds_left):
+        for sq in self.squares:
+            if sq.habit_name == habit_name:
+                sq.countdown_left = seconds_left
+                sq.update()
+
+    def _update_countdown_displays(self):
+        """1 Hz: refresh every square's visible countdown number."""
+        for habit_name, info in self.pending_auto_stops.items():
+            left = max(0, int(math.ceil(
+                (info['deadline'] - datetime.now()).total_seconds())))
+            for sq in self.squares:
+                if sq.habit_name == habit_name and sq.countdown_left != left:
+                    sq.countdown_left = left
+                    sq.update()
 
     def _drop_grace_timer(self, habit_name: str):
         timer = self._grace_timers.pop(habit_name, None)
@@ -932,6 +1047,7 @@ class BubbleWidget(QWidget):
         for sq in self.squares:
             if sq.running:
                 sq.update()
+        self._update_countdown_displays()
         self.core.update()   # the running-border colour lives on the core now
         self._save_state_throttled()
 
@@ -975,6 +1091,14 @@ class BubbleWidget(QWidget):
 
     def mousePressEvent(self, e):
         if e.button() == Qt.LeftButton:
+            c = self._center()
+            if (self.timers and math.hypot(e.pos().x() - c.x(),
+                                           e.pos().y() - c.y())
+                    <= BUBBLE_D / 2):
+                # left-click on the center circle with timers running:
+                # stop (and queue) every active timer in one go
+                self.stop_all_timers()
+                return
             self.begin_widget_drag()
         elif e.button() == Qt.RightButton:
             self._hide_tooltip()
@@ -1021,8 +1145,13 @@ class BubbleWidget(QWidget):
                 'pos': [self.x(), self.y()],
                 'timers': {h: s.isoformat(timespec='seconds')
                            for h, s in self.timers.items()},
-                'pending_stops': {h: s.isoformat(timespec='seconds')
-                                  for h, s in self.pending_auto_stops.items()},
+                'pending_stops': {
+                    h: {'stopped_at': i['stopped_at'].isoformat(
+                            timespec='seconds'),
+                        'deadline': i['deadline'].isoformat(
+                            timespec='seconds'),
+                        'deduct': i['deduct']}
+                    for h, i in self.pending_auto_stops.items()},
             }
             with open(STATE_FILE + '.tmp', 'w') as f:
                 json.dump(data, f)
@@ -1043,20 +1172,33 @@ class BubbleWidget(QWidget):
                     self.timers[h] = datetime.fromisoformat(iso)
                 except ValueError:
                     pass
-            for h, iso in (data.get('pending_stops') or {}).items():
+            for h, raw in (data.get('pending_stops') or {}).items():
                 if h not in self.timers:
                     continue
-                try:
-                    stopped_at = datetime.fromisoformat(iso)
-                except ValueError:
+                if isinstance(raw, str):   # old grace-era format
+                    raw = {'stopped_at': raw}
+                if not isinstance(raw, dict):
                     continue
-                self.pending_auto_stops[h] = stopped_at
-                remaining_ms = AUTO_STOP_GRACE_MS - int(
-                    (datetime.now() - stopped_at).total_seconds() * 1000)
-                # expired while we were down → 0 ms: finalize as soon as
+                try:
+                    stopped_at = datetime.fromisoformat(raw['stopped_at'])
+                except (KeyError, ValueError):
+                    continue
+                try:
+                    deadline = datetime.fromisoformat(raw['deadline'])
+                except (KeyError, ValueError):
+                    deadline = stopped_at + timedelta(seconds=30)
+                deduct = raw.get('deduct')
+                self.pending_auto_stops[h] = {
+                    'stopped_at': stopped_at,
+                    'deadline': deadline,
+                    'deduct': deduct if isinstance(deduct, int)
+                    and deduct >= 0 else 35,
+                }
+                remaining_s = (deadline - datetime.now()).total_seconds()
+                # expired while we were down → 0 s: finalize as soon as
                 # the event loop runs, never inline (init is still building
                 # and e.g. ack_timer doesn't exist yet)
-                self._arm_grace(h, remaining_ms)
+                self._arm_grace(h, remaining_s)
         except (OSError, ValueError):
             self.recall_to_tray(save=False)
 
@@ -1250,10 +1392,10 @@ class PcBubbleApp:
 
         # window-activity auto start/stop for mapped habits
         self.auto = AutoDetectController(
-            # a timer inside its grace period counts as NOT running, so
+            # a timer inside its countdown counts as NOT running, so
             # the controller re-fires on_start when the window regains
             # focus — which cancels the pending stop and continues the
-            # same session instead of letting the grace expire under it
+            # same session instead of letting the countdown expire under it
             is_running=lambda h: (h in self.bubble.timers
                                   and h not in self.bubble.pending_auto_stops),
             on_start=self._auto_started,
@@ -1266,8 +1408,9 @@ class PcBubbleApp:
         self.auto.start()
 
     def _auto_started(self, habit: str):
-        # back within the grace period → cancel the pending stop; the
-        # timer never actually stopped, so this is the SAME session
+        # activity resumed before the countdown ran out → cancel the
+        # pending stop; the timer never actually stopped, so this is
+        # the SAME session
         self.bubble.cancel_pending_stop(habit)
         if self.bubble.start_timer(habit):
             cls = self.auto.mapping_for(habit)
@@ -1275,9 +1418,13 @@ class PcBubbleApp:
                        self.bubble)
 
     def _auto_stopped(self, habit: str):
-        # debounced: finalizes retroactively only if the user doesn't
-        # return to the window within the grace period
-        self.bubble.request_auto_stop(habit)
+        # visible countdown on the square; at zero the session is
+        # finalized retroactively with idle + countdown seconds
+        # subtracted from its end (the gap never happened)
+        countdown = self.auto.countdown_seconds()
+        self.bubble.request_auto_stop(
+            habit, countdown_s=countdown,
+            deduct_s=self.auto.idle_seconds() + countdown)
 
     def on_tray_activated(self, reason):
         if reason in (QSystemTrayIcon.Trigger, QSystemTrayIcon.DoubleClick):
@@ -1296,6 +1443,9 @@ class PcBubbleApp:
         act = menu.addAction('Hide bubble', self.toggle_bubble)
         act.setIcon(menu_icon('last_arrow_down.png', 'arrow-down'))
         menu.addSeparator()
+        act = menu.addAction('Settings…', self.open_settings)
+        act.setIcon(menu_icon('gears1_sc44.png', 'preferences-system',
+                              'configure'))
         act = menu.addAction('Quit', self.quit)
         act.setIcon(menu_icon('power_button4.png', 'application-exit'))
         self.bubble._pin_spread = True   # keep the ring spread under the menu
@@ -1399,6 +1549,12 @@ class PcBubbleApp:
         self.auto.clear_mapping(habit)
         FlashLabel('{} auto-detect OFF'.format(habit), self.bubble)
 
+    def open_settings(self):
+        """Bubble menu "Settings…": habit picker + auto-detect timings."""
+        dialog = PcSettingsDialog(self.bubble, self.auto, self.bubble)
+        dialog.exec_()
+        self.bubble._poll_config()
+
     def show_flash(self, habit: str, minutes: int, queued: bool):
         if minutes > 0:
             text = '{} {}m → phone {}'.format(
@@ -1410,8 +1566,8 @@ class PcBubbleApp:
 
     def quit(self):
         self.auto.stop()
-        # flush grace-period stops now (retroactively) so quitting the
-        # widget can't silently swallow a session still in its grace period
+        # flush pending countdown stops now (retroactively) so quitting
+        # the widget can't silently swallow a session mid-countdown
         self.bubble.finalize_pending_stops()
         self.bubble._save_state()
         self.tray.hide()
