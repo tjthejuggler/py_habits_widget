@@ -96,10 +96,22 @@ BUBBLE_D = 56          # bubble diameter (px)
 SQUARE_D = 46          # habit square size (px)
 RUN_GROW = 1.30        # running squares grow 30% — room for ✕ + countdown
 SQUARE_D_RUN = int(round(SQUARE_D * RUN_GROW))   # 46 → 60 while running
+# running squares carry corner chips (✕ / countdown / ←) that stick a
+# little past the body — the widget grows a transparent margin for them
+BADGE_OVERHANG = 6     # transparent margin around a running square's body
+SQUARE_D_RUN_W = SQUARE_D_RUN + 2 * BADGE_OVERHANG  # widget side, running
+BADGE_D = 20           # ✕ / ← chip side (px)
+COUNTDOWN_W, COUNTDOWN_H = 26, 20   # countdown chip box
+BADGE_STICK = 5        # how far chips stick out past the body corner
+BADGE_RADIUS = 6       # chip corner rounding (matches the square body)
+RUN_GAP = 10           # extra bubble↔square distance while its timer runs
 REST_GAP = 4           # bubble↔square gap at rest — just a sliver
-REST_R = BUBBLE_D // 2 + REST_GAP + SQUARE_D // 2   # running timers sit here
+REST_R = BUBBLE_D // 2 + REST_GAP + SQUARE_D // 2   # base rest ring; running squares sit RUN_GAP further out
 TUCK_R = BUBBLE_D // 2 + SQUARE_D // 2 - 26         # idle: mostly BEHIND the bubble
 SPREAD_PAD = 10        # ring spacing per square when spread out for clicking
+CORE_PAD = 14          # margin around the circle for its all-timers chips
+CORE_D = BUBBLE_D + 2 * CORE_PAD   # center-circle widget side
+CORE_BADGE_D = 22      # the circle's ✕ / ← chips (act on ALL timers)
 DRAG_THRESHOLD = 8     # px before a square press becomes a whole-widget drag
 PINCH = 0.38           # black-hole: max squeeze of a tucked square's near edge
 PINCH_FADE = 0.45      # black-hole: max transparency of that near edge
@@ -140,8 +152,11 @@ def fmt_elapsed(seconds: int) -> str:
 
 
 def square_d(running: bool) -> int:
-    """Habit square side — 30% larger while its timer runs."""
-    return SQUARE_D_RUN if running else SQUARE_D
+    """
+    Habit square WIDGET side — the body grows 30% while running, plus
+    the transparent margin its corner chips stick out into.
+    """
+    return SQUARE_D_RUN_W if running else SQUARE_D
 
 
 def _tint_pixmap_white(pm: QPixmap) -> QPixmap:
@@ -161,6 +176,49 @@ def _tint_pixmap_white(pm: QPixmap) -> QPixmap:
     return tinted
 
 
+def _badge_box(p: QPainter, rect: QRect, border: QColor):
+    """Chip base: rounded dark box with a 1 px coloured border."""
+    p.setPen(QPen(border, 1))
+    p.setBrush(OVERLAY_BG)
+    p.drawRoundedRect(QRectF(rect), BADGE_RADIUS, BADGE_RADIUS)
+    p.setBrush(Qt.NoBrush)
+
+
+def draw_x_badge(p: QPainter, rect: QRect):
+    """✕ chip — discards the timer (red, like the menu's cancel)."""
+    _badge_box(p, rect, CANCEL_RED)
+    pen = QPen(CANCEL_RED, 2)
+    pen.setCapStyle(Qt.RoundCap)
+    p.setPen(pen)
+    m = 6
+    p.drawLine(rect.left() + m, rect.top() + m,
+               rect.right() - m, rect.bottom() - m)
+    p.drawLine(rect.left() + m, rect.bottom() - m,
+               rect.right() - m, rect.top() + m)
+
+
+def draw_back_badge(p: QPainter, rect: QRect):
+    """← chip — pulls the timer's start 1 minute further back."""
+    _badge_box(p, rect, QColor(130, 130, 140))
+    pen = QPen(TEXT_COLOR, 2)
+    pen.setCapStyle(Qt.RoundCap)
+    p.setPen(pen)
+    cy = rect.center().y()
+    m, head = 5, 4
+    p.drawLine(rect.right() - m, cy, rect.left() + m, cy)
+    p.drawLine(rect.left() + m, cy, rect.left() + m + head, cy - head)
+    p.drawLine(rect.left() + m, cy, rect.left() + m + head, cy + head)
+
+
+def draw_countdown_badge(p: QPainter, rect: QRect, seconds_left):
+    """Countdown chip — dark box, red border, the two big digits."""
+    _badge_box(p, rect, CANCEL_RED)
+    p.setPen(TEXT_COLOR)
+    p.setFont(QFont('Sans', 9, QFont.Bold))
+    p.drawText(rect, Qt.AlignCenter,
+               '{:02d}'.format(max(0, int(seconds_left)) % 100))
+
+
 class HabitSquare(QWidget):
     """One habit square: click to start/stop its timer."""
 
@@ -176,11 +234,13 @@ class HabitSquare(QWidget):
         self._angle = 0.0         # ring position in radians (set by the bubble)
         self._radius = float(TUCK_R)  # current ring radius (animated)
         self._press_pos = None    # global press pos while click-vs-drag is pending
-        self._x_rect = None       # hit rect of the ✕ button (set while rendering)
+        self._x_rect = None       # hit rect of the ✕ chip (set while rendering)
+        self._back_rect = None    # hit rect of the ← chip (set while rendering)
         self.setFixedSize(SQUARE_D, SQUARE_D)
         self.setMouseTracking(True)   # hover self-heal needs no-button moves
         self.setCursor(Qt.PointingHandCursor)
-        self._icon_pm = self._load_icon()
+        self._icon_src = self._load_icon()   # tinted, unscaled
+        self._icon_cache = {}     # (box_w, box_h) → scaled icon (2 sizes max)
 
     def _apply_size(self):
         """Running squares are 30% larger — room for the ✕ and countdown."""
@@ -194,11 +254,30 @@ class HabitSquare(QWidget):
         if path and os.path.exists(path):
             pm = QPixmap(path)
             if not pm.isNull():
-                pm = pm.scaled(
-                    SQUARE_D - 18, SQUARE_D - 26,
-                    Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                # cap the source so the cache stays tiny; scaling to
+                # the body happens per size in _icon_for()
+                if pm.width() > 128 or pm.height() > 128:
+                    pm = pm.scaled(128, 128,
+                                   Qt.KeepAspectRatio, Qt.SmoothTransformation)
                 return _tint_pixmap_white(pm)
         return QPixmap()
+
+    def _icon_for(self, body_d: int):
+        """
+        The white icon scaled to nearly fill the body — only a slim
+        margin, a little more at the bottom while running so the
+        elapsed label fits underneath.
+        """
+        if self._icon_src is None or self._icon_src.isNull():
+            return None
+        box_w = body_d - 10
+        box_h = body_d - (22 if self.running else 14)
+        pm = self._icon_cache.get((box_w, box_h))
+        if pm is None:
+            pm = self._icon_src.scaled(
+                box_w, box_h, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            self._icon_cache[(box_w, box_h)] = pm
+        return pm
 
     def tooltip_lines(self):
         """
@@ -233,14 +312,22 @@ class HabitSquare(QWidget):
 
     def mousePressEvent(self, e):
         if e.button() == Qt.LeftButton:
-            if (self.running and self._x_rect is not None
-                    and self._x_rect.contains(e.pos())):
-                # the ✕ button: discard the timer outright — same as the
-                # right-click menu's "Cancel timer (discard)"
+            if self.running:
                 win = self.window()
-                win._hide_tooltip()  # type: ignore[attr-defined]
-                win.cancel_timer(self.habit_name)  # type: ignore[attr-defined]
-                return
+                if (self._x_rect is not None
+                        and self._x_rect.contains(e.pos())):
+                    # the ✕ chip: discard the timer outright — same as
+                    # the right-click menu's "Cancel timer (discard)"
+                    win._hide_tooltip()  # type: ignore[attr-defined]
+                    win.cancel_timer(self.habit_name)  # type: ignore[attr-defined]
+                    return
+                if (self._back_rect is not None
+                        and self._back_rect.contains(e.pos())):
+                    # the ← chip: pull the start 1 min back — same as
+                    # the right-click menu's backdate option
+                    win._hide_tooltip()  # type: ignore[attr-defined]
+                    win.backdate_timer(self.habit_name, 1)  # type: ignore[attr-defined]
+                    return
             # click-vs-drag: don't toggle yet — a drag may take over
             self._press_pos = e.globalPos()
         elif e.button() == Qt.RightButton:
@@ -312,10 +399,11 @@ class HabitSquare(QWidget):
         """
         The square's normal look rendered offscreen — rounded rect in the
         habit's phone-matched tier colour, icon, dots, timer, and while
-        running the ✕ cancel button + idle-countdown box — so the
-        black-hole warp can distort all of it.
+        running the ✕ / ← chips + idle-countdown box sticking slightly
+        out past the body's corners — so the black-hole warp can distort
+        all of it.
         """
-        d = self.width()            # running squares are 30% larger
+        d = self.width()            # running squares are the larger widgets
         pm = QPixmap(d, d)
         pm.fill(Qt.transparent)
         p = QPainter(pm)
@@ -325,82 +413,88 @@ class HabitSquare(QWidget):
         bg.setAlpha(235)   # let the dark widget bleed through just slightly
         on_glass = QColor(bg_hex).lightness() > 128   # glass bg → dark text
         fg = QColor(20, 20, 24) if on_glass else TEXT_COLOR
+
+        # the body: inset by the chip margin while running so the corner
+        # chips can stick out beyond it
+        bx = BADGE_OVERHANG if self.running else 1
+        bd = d - 2 * bx
         r = 12.0
         p.setPen(Qt.NoPen)
         p.setBrush(bg)
-        p.drawRoundedRect(1, 1, d - 2, d - 2, r, r)
+        p.drawRoundedRect(bx, bx, bd, bd, r, r)
         p.setBrush(Qt.NoBrush)
         if self.running:
             p.setPen(QPen(BORDER_SQ_RUN, 2))
-            p.drawRoundedRect(1, 1, d - 2, d - 2, r, r)
+            p.drawRoundedRect(bx, bx, bd, bd, r, r)
         elif inner_hex:
             # phone phase 4: double vivid border with a thin black gap
             p.setPen(QPen(QColor(outer_hex), 1))
-            p.drawRoundedRect(QRectF(0.5, 0.5, d - 1, d - 1), r, r)
+            p.drawRoundedRect(QRectF(bx - 0.5, bx - 0.5, bd + 1, bd + 1), r, r)
             p.setPen(QPen(Qt.black, 1))
-            p.drawRoundedRect(QRectF(2.5, 2.5, d - 5, d - 5), r - 2, r - 2)
+            p.drawRoundedRect(QRectF(bx + 1.5, bx + 1.5, bd - 3, bd - 3),
+                              r - 2, r - 2)
             p.setPen(QPen(QColor(inner_hex), 1))
-            p.drawRoundedRect(QRectF(4.5, 4.5, d - 9, d - 9), r - 4, r - 4)
+            p.drawRoundedRect(QRectF(bx + 3.5, bx + 3.5, bd - 7, bd - 7),
+                              r - 4, r - 4)
         else:
             p.setPen(QPen(QColor(border_hex) if border_hex else BORDER_IDLE,
                           2 if border_hex else 1))
-            p.drawRoundedRect(1, 1, d - 2, d - 2, r, r)
+            p.drawRoundedRect(bx, bx, bd, bd, r, r)
 
-        cx = d // 2
-        if not self._icon_pm.isNull():
-            p.drawPixmap(cx - self._icon_pm.width() // 2,
-                         cx - self._icon_pm.height() // 2 - 4, self._icon_pm)
+        icon = self._icon_for(bd)
+        if icon is not None:
+            p.drawPixmap(bx + bd // 2 - icon.width() // 2,
+                         bx + bd // 2 - icon.height() // 2
+                         - (4 if self.running else 3),
+                         icon)
         else:
             p.setPen(fg)
-            f = QFont('Sans', 13, QFont.Bold)
-            p.setFont(f)
+            p.setFont(QFont('Sans', 14 + (4 if self.running else 0),
+                            QFont.Bold))
             initial = self.habit_name[:1].upper()
-            p.drawText(pm.rect().adjusted(0, -4, 0, -4), Qt.AlignCenter, initial)
+            p.drawText(QRect(bx, bx, bd, bd).adjusted(0, -4, 0, -4),
+                       Qt.AlignCenter, initial)
 
         if self.running:
             secs = self.window().elapsed_for(self.habit_name)  # type: ignore[attr-defined]
             p.setPen(fg)
             p.setFont(QFont('Sans', 7, QFont.Bold))
-            p.drawText(pm.rect().adjusted(0, d - 16, 0, -2),
+            p.drawText(QRect(bx, bx + bd - 16, bd, 14),
                        Qt.AlignCenter, fmt_elapsed(secs))
 
-        # idle countdown: black box, red border, two digits, top-left
+        # idle countdown: rounded chip, red border, two digits — stuck
+        # slightly out past the body's top-left corner
         if self.countdown_left is not None:
-            bw, bh = 20, 16
-            p.setPen(QPen(CANCEL_RED, 1))
-            p.setBrush(OVERLAY_BG)
-            p.drawRect(1, 1, bw, bh)
-            p.setPen(TEXT_COLOR)
-            p.setFont(QFont('Sans', 8, QFont.Bold))
-            p.drawText(QRect(1, 1, bw + 1, bh + 1), Qt.AlignCenter,
-                       '{:02d}'.format(max(0, int(self.countdown_left)) % 100))
+            draw_countdown_badge(
+                p, QRect(bx - BADGE_STICK, bx - BADGE_STICK,
+                         COUNTDOWN_W, COUNTDOWN_H),
+                self.countdown_left)
 
-        # ✕ cancel button (top-right, running only) — discards the timer
+        # ✕ (top-right) discards the timer; ← (bottom-left) pulls its
+        # start 1 min back — both running-only, sticking out likewise
         self._x_rect = None
+        self._back_rect = None
         if self.running:
-            xs = 14
-            xr = QRect(d - xs - 2, 2, xs, xs)
+            xr = QRect(bx + bd - BADGE_D + BADGE_STICK, bx - BADGE_STICK,
+                       BADGE_D, BADGE_D)
             self._x_rect = xr
-            p.setPen(QPen(CANCEL_RED, 1))
-            p.setBrush(OVERLAY_BG)
-            p.drawRect(xr)
-            p.setPen(QPen(CANCEL_RED, 2))
-            m = 4
-            p.drawLine(xr.left() + m, xr.top() + m,
-                       xr.right() - m, xr.bottom() - m)
-            p.drawLine(xr.left() + m, xr.bottom() - m,
-                       xr.right() - m, xr.top() + m)
+            draw_x_badge(p, xr)
+            br = QRect(bx - BADGE_STICK, bx + bd - BADGE_D + BADGE_STICK,
+                       BADGE_D, BADGE_D)
+            self._back_rect = br
+            draw_back_badge(p, br)
 
-        # sync dot: top-right normally, nudged left of the ✕ while running
-        dot_x = d - 26 if self.running else d - 12
+        # sync dot: inside the body's top-right, clear of the ✕ chip
+        dot_x = (bx + bd - 26) if self.running else (d - 12)
+        dot_y = (bx + 4) if self.running else 5
         if self.pending > 0:
             p.setPen(Qt.NoPen)
             p.setBrush(DOT_PENDING)
-            p.drawEllipse(dot_x, 5, 8, 8)
+            p.drawEllipse(dot_x, dot_y, 8, 8)
         elif time.time() < self.acked_flash_until:
             p.setPen(Qt.NoPen)
             p.setBrush(DOT_ACKED)
-            p.drawEllipse(dot_x, 5, 8, 8)
+            p.drawEllipse(dot_x, dot_y, 8, 8)
         p.end()
         return pm
 
@@ -467,7 +561,7 @@ class BubbleWidget(QWidget):
         self._config_sig = None          # (name, icon, minutes_primary) tuple
         self._spread_r = REST_R           # spread ring radius (per habit count)
         self._near = False                # mouse inside the approach zone?
-        self.window_d = 2 * (REST_R + SQUARE_D_RUN // 2) + 8
+        self.window_d = 2 * (REST_R + RUN_GAP + SQUARE_D_RUN_W // 2) + 8
         self.setFixedSize(self.window_d, self.window_d)
         # the center circle as a child widget: painted ABOVE the squares
         # so tucked ones collapse behind it (black-hole). Transparent for
@@ -559,8 +653,8 @@ class BubbleWidget(QWidget):
         # its own non-overlapping clickable slot (sized for RUNNING
         # squares — they are the big ones); the window grows to match
         self._spread_r = (max(REST_R, int(math.ceil(
-            n * (SQUARE_D_RUN + SPREAD_PAD) / (2 * math.pi)))) if n else REST_R)
-        new_d = 2 * (self._spread_r + SQUARE_D_RUN // 2) + 8
+            n * (SQUARE_D_RUN_W + SPREAD_PAD) / (2 * math.pi)))) if n else REST_R)
+        new_d = 2 * (self._spread_r + RUN_GAP + SQUARE_D_RUN_W // 2) + 8
         if new_d != self.window_d:
             self.window_d = new_d
             self.setFixedSize(new_d, new_d)
@@ -611,10 +705,14 @@ class BubbleWidget(QWidget):
         mouse spreads the whole ring out so every square is easy to click.
         """
         if self._near:
-            return float(self._spread_r)
-        has_indicator = (sq.running or sq.pending > 0
-                         or time.time() < sq.acked_flash_until)
-        return float(REST_R if has_indicator else TUCK_R)
+            base = float(self._spread_r)
+        else:
+            has_indicator = (sq.running or sq.pending > 0
+                             or time.time() < sq.acked_flash_until)
+            base = float(REST_R if has_indicator else TUCK_R)
+        # a running square also keeps a little extra distance from the
+        # circle — its chips stick out, and it stays clear of the core's
+        return base + RUN_GAP if sq.running else base
 
     def _place_square(self, sq: HabitSquare):
         c = self._center()
@@ -753,6 +851,7 @@ class BubbleWidget(QWidget):
             if sq.habit_name == habit_name:
                 sq.update()
         self.update()
+        self.core.update()   # the circle's border/chips react at once
         self._save_state()
         return True
 
@@ -799,12 +898,13 @@ class BubbleWidget(QWidget):
             if sq.habit_name == habit_name:
                 sq.update()
         self.update()
+        self.core.update()   # the circle's border/chips react at once
         self._save_state()
         self.window().show_flash(
             habit_name, minutes if kind == 'session' else 0,
             event_id is not None)
 
-    def cancel_timer(self, habit_name: str):
+    def cancel_timer(self, habit_name: str, flash: bool = True):
         """
         Discards a running timer outright: nothing is queued on the
         bridge, nothing reaches the phone, no event is recorded —
@@ -823,8 +923,10 @@ class BubbleWidget(QWidget):
             if sq.habit_name == habit_name:
                 sq.update()
         self.update()
+        self.core.update()   # the circle's border/chips react at once
         self._save_state()
-        FlashLabel('{} ✖ timer discarded'.format(habit_name), self)
+        if flash:
+            FlashLabel('{} ✖ timer discarded'.format(habit_name), self)
         if self.auto_note_toggle is not None:
             # a mapped habit must not be instantly auto-restarted by
             # the still-focused window — same rule as a manual stop
@@ -843,6 +945,26 @@ class BubbleWidget(QWidget):
                 # a mapped habit must not be instantly auto-restarted by
                 # the still-focused window — same rule as manual stops
                 self.auto_note_toggle(name, False)
+
+    def cancel_all_timers(self):
+        """
+        The core circle's ✕ (shown while 2+ timers run): discard every
+        active timer — as if each square's ✕ chip had been clicked at once.
+        """
+        self._hide_tooltip()
+        for name in list(self.timers):
+            self.cancel_timer(name, flash=False)
+        FlashLabel('✖ all timers discarded', self)
+
+    def backdate_all_timers(self, minutes: int = 1):
+        """
+        The core circle's ← (shown while 2+ timers run): pull every
+        running start `minutes` further back — as if each square's ←
+        chip had been clicked at once.
+        """
+        self._hide_tooltip()
+        for name in list(self.timers):
+            self.backdate_timer(name, minutes)
 
     # ── auto-stop countdown (visible debounce) ──────────────────────────
 
@@ -1057,7 +1179,7 @@ class BubbleWidget(QWidget):
         resizes when the habit count changes).
         """
         c = self._center()
-        self.core.move(c.x() - BUBBLE_D // 2, c.y() - BUBBLE_D // 2)
+        self.core.move(c.x() - CORE_D // 2, c.y() - CORE_D // 2)
 
     # ── dragging ────────────────────────────────────────────────────────
 
@@ -1092,6 +1214,17 @@ class BubbleWidget(QWidget):
     def mousePressEvent(self, e):
         if e.button() == Qt.LeftButton:
             c = self._center()
+            if len(self.timers) > 1:
+                # the core's all-timers chips (painted on the circle,
+                # hit-tested here — the core itself is mouse-transparent)
+                xr, br = self.core.badge_rects()
+                core_pos = self.core.pos()
+                if xr is not None and xr.translated(core_pos).contains(e.pos()):
+                    self.cancel_all_timers()   # ✕ on every timer at once
+                    return
+                if br is not None and br.translated(core_pos).contains(e.pos()):
+                    self.backdate_all_timers()  # ← on every timer at once
+                    return
             if (self.timers and math.hypot(e.pos().x() - c.x(),
                                            e.pos().y() - c.y())
                     <= BUBBLE_D / 2):
@@ -1235,13 +1368,16 @@ class BubbleCore(QWidget):
     habit squares — collapsed squares slide behind it (black-hole
     collapse). It is transparent for mouse events, so clicking, dragging
     and hovering the middle behave exactly as they did when the
-    container painted the circle itself.
+    container painted the circle itself. While 2+ timers run it also
+    carries ✕ / ← chips on its rim — the same actions as the
+    squares' chips, applied to ALL running timers at once (the
+    container hit-tests them; it sees the clicks).
     """
 
     def __init__(self, parent):
         super().__init__(parent)
         self.setAttribute(Qt.WA_TransparentForMouseEvents)
-        self.setFixedSize(BUBBLE_D, BUBBLE_D)
+        self.setFixedSize(CORE_D, CORE_D)   # circle + chip margin
         pm = QPixmap(TAIL_ICON)
         if not pm.isNull():
             # fill the circle: the icon's edge reaches the circle's inner
@@ -1252,10 +1388,23 @@ class BubbleCore(QWidget):
         else:
             self.tail_pm = QPixmap()
 
+    def badge_rects(self):
+        """
+        The ✕ (upper-right rim) and ← (lower-left rim) chip rects in
+        core coordinates — or (None, None) unless 2+ timers run.
+        """
+        if len(self.window().timers) < 2:
+            return None, None
+        k = int((BUBBLE_D / 2 - 4) * 0.7071)   # chips sit on the rim
+        c = CORE_D // 2
+        half = CORE_BADGE_D // 2
+        return (QRect(c + k - half, c - k - half, CORE_BADGE_D, CORE_BADGE_D),
+                QRect(c - k - half, c + k - half, CORE_BADGE_D, CORE_BADGE_D))
+
     def paintEvent(self, _):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
-        c = QPoint(BUBBLE_D // 2, BUBBLE_D // 2)
+        c = QPoint(CORE_D // 2, CORE_D // 2)
         p.setPen(Qt.NoPen)
         p.setBrush(BG_COLOR)
         p.drawEllipse(c, BUBBLE_D // 2, BUBBLE_D // 2)
@@ -1270,6 +1419,10 @@ class BubbleCore(QWidget):
             p.setPen(TEXT_COLOR)
             p.setFont(QFont('Sans', 12, QFont.Bold))
             p.drawText(self.rect(), Qt.AlignCenter, 'tail')
+        xr, br = self.badge_rects()
+        if xr is not None:
+            draw_x_badge(p, xr)
+            draw_back_badge(p, br)
         p.end()
 
 

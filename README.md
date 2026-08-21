@@ -451,3 +451,25 @@ How it works on this KDE/Wayland machine (`auto_detect.py`):
 - Smoke tests: section **[2b]** rewritten for the countdown (arm /
   cancel / expiry with the 35 s deduction / manual stop mid-countdown
   / state.json persistence incl. deadline + deduct).
+- **Settings list: alphabetical + searchable + selected chips**
+  *(2026-08-21)*: the settings habit picker sorts case-insensitively,
+  a search box at the top filters the list live (checked state
+  survives filtering), and a "Selected for the PC widget" row below
+  the list shows every checked habit as a green highlight tag that
+  updates on every check/uncheck.
+- **Corner chips + core chips polish** *(2026-08-21)*: the ✕ and
+  countdown overlays on running squares are now rounded chips
+  (matching the square's corner radius), slightly bigger, and offset
+  to stick out past the body's corners — the running widget grows a
+  6 px transparent margin (`SQUARE_D_RUN_W`) to make room. New ← chip
+  at the bottom-left = the right-click "start a minute earlier"
+  (backdate 1 min). Running squares also sit 10 px further from the
+  center circle (`RUN_GAP`), and the habit icons render much larger
+  (slim margins, scaled per body size and cached). With 2+ timers
+  running the center circle grows its own ✕ / ← chips on its rim
+  that act on ALL running timers at once (discard-all via
+  `cancel_all_timers`, backdate-all via `backdate_all_timers`;
+  hit-tested by the container since the core is mouse-transparent).
+  Smoke tests: new section **[3b]** covers the chips, and the suite
+  now deletes its temp state file up front so a crashed run can't
+  leak running timers into the next one.

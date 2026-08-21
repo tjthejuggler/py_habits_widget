@@ -181,6 +181,9 @@ def main() -> int:
     # never touch the real ~/.config state file while testing
     widget_mod.STATE_FILE = os.path.join(
         tempfile.gettempdir(), 'pc_widget_smoke_state.json')
+    if os.path.exists(widget_mod.STATE_FILE):
+        os.remove(widget_mod.STATE_FILE)   # a crashed run must not leak
+                                           # its timers into the next one
 
     # deterministic tooltip stats: temp habitsdb with known today counts
     tmp_db = os.path.join(tempfile.gettempdir(),
@@ -324,26 +327,30 @@ def main() -> int:
 
     # ── ring layout + backdate (right-click menu) ──────────────────────
     print('[3] ring layout + backdate')
-    from pc_bubble_widget import REST_R, TUCK_R, SQUARE_D, SQUARE_D_RUN
+    from pc_bubble_widget import (REST_R, TUCK_R, SQUARE_D,
+                                  SQUARE_D_RUN_W, RUN_GAP)
 
     bubble._near = False
     bubble._apply_layout_now()
     check('idle squares tuck in when mouse away',
           all(abs(s._radius - TUCK_R) < 0.5 for s in bubble.squares))
     check('window sized to spread ring (running squares are the big ones)',
-          bubble.width() == 2 * (bubble._spread_r + SQUARE_D_RUN // 2) + 8)
+          bubble.width() == 2 * (bubble._spread_r + RUN_GAP
+                                 + SQUARE_D_RUN_W // 2) + 8)
 
     bubble.on_square_clicked(bubble.squares[0])       # start Meditation
     bubble._apply_layout_now()
-    check('running square stays prominent at rest radius',
-          abs(bubble.squares[0]._radius - REST_R) < 0.5)
+    check('running square stays prominent, a touch further out',
+          abs(bubble.squares[0]._radius - (REST_R + RUN_GAP)) < 0.5)
     check('idle squares stay tucked',
           all(abs(s._radius - TUCK_R) < 0.5 for s in bubble.squares[1:]))
 
     bubble._near = True
     bubble._apply_layout_now()
     check('mouse near spreads every square out',
-          all(abs(s._radius - bubble._spread_r) < 0.5 for s in bubble.squares))
+          all(abs(s._radius - (bubble._spread_r
+                               + (RUN_GAP if s.running else 0))) < 0.5
+              for s in bubble.squares))
     bubble._near = False
 
     before = bubble.elapsed_for('Meditation')
@@ -354,6 +361,32 @@ def main() -> int:
     check('backdate refuses idle habit',
           not bubble.backdate_timer('Reading', 1))
     bubble.on_square_clicked(bubble.squares[0])       # stop → event queued
+
+    # ── corner chips + the core's all-timers chips ─────────────────────
+    print('[3b] corner chips + core chips')
+    bubble.on_square_clicked(bubble.squares[0])       # Meditation running
+    sq = bubble.squares[0]
+    check('running square widget carries the chip margin',
+          sq.width() == SQUARE_D_RUN_W)
+    sq._render_body()          # populates the chip hit rects
+    check('✕ + ← chip hit rects present while running',
+          sq._x_rect is not None and sq._back_rect is not None)
+    check('core hides its chips with a single timer',
+          bubble.core.badge_rects() == (None, None))
+    other = bubble.squares[1]
+    bubble.on_square_clicked(other)                   # second timer
+    names = ('Meditation', other.habit_name)
+    xr, br = bubble.core.badge_rects()
+    check('core shows ✕ + ← chips with 2+ timers',
+          xr is not None and br is not None)
+    before = [bubble.elapsed_for(n) for n in names]
+    bubble.backdate_all_timers(1)
+    check('core ← backdates every running timer',
+          all(55 <= b - a <= 65 for a, b in
+              zip(before, [bubble.elapsed_for(n) for n in names])))
+    bubble.cancel_all_timers()
+    check('core ✕ discards every running timer',
+          not bubble.timers and all(not s.running for s in bubble.squares))
 
     # ── hover enter/leave drives the spread (Wayland-safe) ─────────────
     print('[4] hover enter/leave spread')
