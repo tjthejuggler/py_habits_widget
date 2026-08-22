@@ -787,6 +787,15 @@ class HabitGridWidget(QWidget):
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("Tail Habit Tracker")
+    # Match the Wayland app_id to py_habits_widget.desktop so KDE resolves
+    # the taskbar icon from the desktop entry.
+    app.setDesktopFileName("py_habits_widget")
+    # Use the same icon as the Android Tail app (green grid + coil composite).
+    icon_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "icons", "tail_icon_pc.png"
+    )
+    if os.path.exists(icon_path):
+        app.setWindowIcon(QIcon(icon_path))
     apply_dark_theme(app)
 
     widget = HabitGridWidget()
